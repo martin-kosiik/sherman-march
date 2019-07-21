@@ -1,0 +1,54 @@
+---
+title: "Code"
+author: "Martin Kosík"
+date: "21 července 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(sf)
+library(mapview)
+```
+
+```{r}
+sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile.shp"))
+plot(sherman_march_map)
+counties <- st_read(here::here("maps/us_counties_1860/NHGIS_POP1860.shp"))
+
+counties <- counties %>% 
+  filter(STATENAM %in% c("Georgia", "North Carolina", "South Carolina"))
+
+
+str(counties)
+```
+
+```{r}
+march_buffer_10km <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 10000, nQuadSegs = 1) 
+
+mapview(counties)
+```
+
+```{r}
+march_counties <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  st_intersection(march_buffer_10km) %>% 
+  st_set_geometry(NULL) %>% 
+ # st_transform(crs = "+proj=longlat +datum=WGS84 +no_defs") %>% 
+  dplyr::select(GISJOIN) %>% 
+  mutate(march = 1)
+```
+
+
+```{r}
+counties <- counties %>% 
+  left_join(march_counties, by = "GISJOIN") %>% 
+  mutate(march = ifelse(march == 1, 1, 0))
+```
+
