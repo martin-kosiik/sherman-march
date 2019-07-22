@@ -46,7 +46,7 @@ mapview(counties)
 ```{r}
 march_counties <- counties %>% 
   st_transform(crs = 7801) %>% 
-  st_intersection(march_buffer_10km) %>% 
+  st_intersection(march_buffer_5miles) %>% 
   st_set_geometry(NULL) %>% 
  # st_transform(crs = "+proj=longlat +datum=WGS84 +no_defs") %>% 
   dplyr::select(fips) %>% 
@@ -67,15 +67,18 @@ county_data <- county_data %>%
   right_join(counties, by = c("fips"))
 
 
-lm(pdem1888 ~ march, data = county_data) %>% 
+lm(pdem1852 ~ march + pslave1860, data = county_data) %>% 
   summary()
 
-fit_model <- function(dep_var){
- lm(as.formula(paste0(dep_var, " ~ march")), data = county_data) %>% 
+fit_model <- function(dep_var, controls = ""){
+ lm(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
   tidy(conf.int = TRUE)
 }
 
-pdem <- paste0("pdem", seq(from = 1876, to = 1964, by = 4))
+
+pdem <- paste0("pdem", seq(from = 1868, to = 1964, by = 4))
+
+
 
 pdem_march_coefs <- map(pdem, fit_model) %>% 
   set_names(pdem) %>% 
@@ -93,6 +96,26 @@ pdem_march_coefs %>%
   geom_pointrange() + 
   theme_bw()
 ```
+
+
+```{r}
+pdem_march_coefs_slave_control <- map(pdem, ~ fit_model(dep_var = ., controls = "+ pslave1860")) %>% 
+  set_names(pdem) %>% 
+  map2(pdem, ~ mutate(.x, year = .y)) %>% 
+  bind_rows() %>% 
+  filter(term == "march") %>% 
+  mutate(year = as.numeric(str_sub(year, start = -4)))
+
+```
+
+```{r}
+pdem_march_coefs_slave_control %>% 
+  ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
+  geom_pointrange() + 
+  theme_bw()
+
+```
+
 
 
 
