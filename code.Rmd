@@ -13,15 +13,16 @@ library(tidyverse)
 library(here)
 library(sf)
 library(mapview)
+library(USAboundaries)
+library(broom)
 ```
 
 ```{r}
 sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile.shp"))
-plot(sherman_march_map)
-counties <- st_read(here::here("maps/us_counties_1860/NHGIS_POP1860.shp"))
 
-counties <- counties %>% 
-  filter(STATENAM %in% c("Georgia", "North Carolina", "South Carolina"))
+plot(sherman_march_map)
+counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
+  mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
 
 str(counties)
@@ -32,6 +33,13 @@ march_buffer_10km <- sherman_march_map %>%
   st_transform(crs = 7801) %>% 
   st_buffer(dist = 10000, nQuadSegs = 1) 
 
+
+march_buffer_5miles <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 8046.72, nQuadSegs = 1) 
+
+
+
 mapview(counties)
 ```
 
@@ -41,14 +49,50 @@ march_counties <- counties %>%
   st_intersection(march_buffer_10km) %>% 
   st_set_geometry(NULL) %>% 
  # st_transform(crs = "+proj=longlat +datum=WGS84 +no_defs") %>% 
-  dplyr::select(GISJOIN) %>% 
+  dplyr::select(fips) %>% 
   mutate(march = 1)
 ```
 
 
 ```{r}
 counties <- counties %>% 
-  left_join(march_counties, by = "GISJOIN") %>% 
-  mutate(march = ifelse(march == 1, 1, 0))
+  left_join(march_counties, by = "fips") %>% 
+  mutate(march = ifelse(is.na(march), 0, march))
 ```
+
+```{r}
+county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
+
+county_data <- county_data %>% 
+  right_join(counties, by = c("fips"))
+
+
+lm(pdem1888 ~ march, data = county_data) %>% 
+  summary()
+
+fit_model <- function(dep_var){
+ lm(as.formula(paste0(dep_var, " ~ march")), data = county_data) %>% 
+  tidy(conf.int = TRUE)
+}
+
+pdem <- paste0("pdem", seq(from = 1876, to = 1964, by = 4))
+
+pdem_march_coefs <- map(pdem, fit_model) %>% 
+  set_names(pdem) %>% 
+  map2(pdem, ~ mutate(.x, year = .y)) %>% 
+  bind_rows() %>% 
+  filter(term == "march") %>% 
+  mutate(year = as.numeric(str_sub(year, start = -4)))
+
+```
+
+
+```{r}
+pdem_march_coefs %>% 
+  ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
+  geom_pointrange() + 
+  theme_bw()
+```
+
+
 
