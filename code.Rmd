@@ -24,15 +24,9 @@ sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapef
 counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
-counties_1860  <- us_counties(states = c("1860-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
+counties_1860  <- us_counties(states = c("1866-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
-plot(counties_1860$geometry)
-plot(counties$geometry)
-
-
-
-#str(counties)
 ```
 
 ```{r}
@@ -46,7 +40,6 @@ march_buffer_5miles <- sherman_march_map %>%
   st_buffer(dist = 8046.72, nQuadSegs = 1) 
 
 
-
 #mapview(counties)
 ```
 
@@ -55,7 +48,7 @@ march_counties <- counties %>%
   st_transform(crs = 7801) %>% 
   st_intersection(march_buffer_5miles) %>% 
   st_set_geometry(NULL) %>% 
- # st_transform(crs = "+proj=longlat +datum=WGS84 +no_defs") %>% 
+  distinct(fips) %>% #count(fips, sort = T)
   dplyr::select(fips) %>% 
   mutate(march = 1)
 ```
@@ -69,7 +62,7 @@ counties <- counties %>%
 counties %>% 
   ggplot(aes(fill = as.factor(march))) +
     geom_sf(color = "gray50", size = 0.5) +
-   # geom_sf(data = st_transform(march_counties, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "gray50")+
+    geom_sf(data = st_transform(sherman_march_map, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 1)+
     theme_void() +
     coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
     labs(fill = "Sherman's March") + 
@@ -78,15 +71,51 @@ counties %>%
 
 ```
 
-```{r}
+
+```{r warning=FALSE, message=FALSE}
 county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
 
 county_data <- county_data %>% 
   right_join(counties, by = c("fips"))
 
+#county_data <- county_data %>% 
+#  full_join(counties, by = c("fips")) %>% 
+#  mutate(march = ifelse(is.na(march), 0, march))
+```
 
-lm(pdem1852 ~ march + pslave1860, data = county_data) %>% 
+```{r}
+county_data %>% 
+  ggplot(aes(fill = pslave1860)) +
+    geom_sf(color = "gray50", size = 0.5) +
+    geom_sf(data = st_transform(sherman_march_map, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+    theme_void() +
+    coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
+    labs(fill = "Proportion of slaves in 1860") +
+    scale_fill_gradient(low = "white", high = "red")
+
+```
+
+```{r}
+county_data %>% 
+  ggplot(aes(fill = pdem1900)) +
+    geom_sf(color = "gray50", size = 0.5) +
+    geom_sf(data = st_transform(sherman_march_map, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+    theme_void() +
+    coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
+    labs(fill = "Proportion of vote for Democrats  in 1900") +
+    scale_fill_gradient(low = "white", high = "red") +
+   theme(legend.position="bottom")
+
+
+```
+
+
+
+```{r}
+
+lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
   summary()
+
 
 fit_model <- function(dep_var, controls = ""){
  lm(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
@@ -130,7 +159,7 @@ pdem_march_coefs_slave_control <- map(pdem, ~ fit_model(dep_var = ., controls = 
 pdem_march_coefs_slave_control %>% 
   ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
   geom_pointrange() + 
-  theme_bw()
+  theme_bw() + geom_hline(yintercept = 0, col = "black")
 
 ```
 
