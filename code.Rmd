@@ -27,6 +27,21 @@ counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina
 counties_1860  <- us_counties(states = c("1866-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
+conf_mon <- read_csv(here::here("data/conf_monuments.csv")) %>% 
+  separate(Coordinates, into = c("lon", "lat"), sep = ", ", remove = FALSE, convert = TRUE) %>% 
+  mutate(lon = as.numeric(lon), 
+         lat = as.numeric(lat)) %>% 
+  filter(!is.na(lon)) %>% 
+  st_as_sf(coords = c("lat","lon"), crs = 4326) # %>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
+
+#mapview(conf_mon)
+
+mon_by_county <- counties %>% 
+  st_join(conf_mon) %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(fips) %>% 
+  summarize(monuments = sum(!is.na(feature_name))) 
+  
 ```
 
 ```{r}
@@ -57,7 +72,9 @@ march_counties <- counties %>%
 ```{r}
 counties <- counties %>% 
   left_join(march_counties, by = "fips") %>% 
-  mutate(march = ifelse(is.na(march), 0, march))
+  left_join(mon_by_county, by = "fips") %>% 
+  mutate(march = ifelse(is.na(march), 0, march), 
+         monuments_dummy = ifelse(monuments == 0, 0, 1))
 
 counties %>% 
   ggplot(aes(fill = as.factor(march))) +
@@ -164,5 +181,13 @@ pdem_march_coefs_slave_control %>%
 ```
 
 
+```{r}
+lm(monuments_dummy ~ march + pslave1860, data = county_data) %>% 
+  summary()
+
+#lm(monuments ~ march + pslave1860, data = county_data) %>% 
+#  summary()
+
+```
 
 

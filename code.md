@@ -1,7 +1,7 @@
 Code
 ================
 Martin Kosík
-23 červenec, 2019
+27 červenec, 2019
 
 ``` r
 knitr::opts_chunk$set(echo = TRUE)
@@ -32,7 +32,51 @@ counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina
 
 counties_1860  <- us_counties(states = c("1866-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
+
+conf_mon <- read_csv(here::here("data/conf_monuments.csv")) %>% 
+  separate(Coordinates, into = c("lon", "lat"), sep = ", ", remove = FALSE, convert = TRUE) %>% 
+  mutate(lon = as.numeric(lon), 
+         lat = as.numeric(lat)) %>% 
+  filter(!is.na(lon)) %>% 
+  st_as_sf(coords = c("lat","lon"), crs = 4326) # %>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
 ```
+
+    ## Parsed with column specification:
+    ## cols(
+    ##   `Unique ID` = col_integer(),
+    ##   feature_name = col_character(),
+    ##   Honoree = col_character(),
+    ##   City = col_character(),
+    ##   County = col_character(),
+    ##   State = col_character(),
+    ##   Side = col_character(),
+    ##   Coordinates = col_character(),
+    ##   `Symbol Type` = col_character(),
+    ##   `Symbol Category` = col_character(),
+    ##   Sponsor = col_character(),
+    ##   `Year Dedicated` = col_character(),
+    ##   `Year Removed` = col_character(),
+    ##   `Was this symbol removed?` = col_character(),
+    ##   Location = col_character()
+    ## )
+
+    ## Warning: Expected 2 pieces. Missing pieces filled with `NA` in 1 rows
+    ## [794].
+
+    ## Warning in evalq(as.numeric(lon), <environment>): NAs introduced by
+    ## coercion
+
+``` r
+#mapview(conf_mon)
+
+mon_by_county <- counties %>% 
+  st_join(conf_mon) %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(fips) %>% 
+  summarize(monuments = sum(!is.na(feature_name))) 
+```
+
+    ## although coordinates are longitude/latitude, st_intersects assumes that they are planar
 
 ``` r
 march_buffer_10km <- sherman_march_map %>% 
@@ -64,7 +108,9 @@ march_counties <- counties %>%
 ``` r
 counties <- counties %>% 
   left_join(march_counties, by = "fips") %>% 
-  mutate(march = ifelse(is.na(march), 0, march))
+  left_join(mon_by_county, by = "fips") %>% 
+  mutate(march = ifelse(is.na(march), 0, march), 
+         monuments_dummy = ifelse(monuments == 0, 0, 1))
 
 counties %>% 
   ggplot(aes(fill = as.factor(march))) +
@@ -187,3 +233,33 @@ pdem_march_coefs_slave_control %>%
 ```
 
 ![](code_files/figure-markdown_github/unnamed-chunk-11-1.png)
+
+``` r
+lm(monuments_dummy ~ march + pslave1860, data = county_data) %>% 
+  summary()
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = monuments_dummy ~ march + pslave1860, data = county_data)
+    ## 
+    ## Residuals:
+    ##     Min      1Q  Median      3Q     Max 
+    ## -0.8943 -0.5595  0.2602  0.3506  0.4723 
+    ## 
+    ## Coefficients:
+    ##             Estimate Std. Error t value Pr(>|t|)    
+    ## (Intercept)   0.5133     0.0575   8.926   <2e-16 ***
+    ## march         0.1006     0.0677   1.485   0.1385    
+    ## pslave1860    0.3453     0.1380   2.502   0.0129 *  
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 0.464 on 302 degrees of freedom
+    ## Multiple R-squared:  0.03761,    Adjusted R-squared:  0.03124 
+    ## F-statistic: 5.901 on 2 and 302 DF,  p-value: 0.003062
+
+``` r
+#lm(monuments ~ march + pslave1860, data = county_data) %>% 
+#  summary()
+```
