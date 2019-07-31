@@ -191,3 +191,51 @@ lm(monuments_dummy ~ march + pslave1860, data = county_data) %>%
 ```
 
 
+```{osm }
+/*
+This shows the cycleway and cycleroute network.
+*/
+
+[out:csv(
+   ::"id", ::"lat", highway, name, "tiger:name_base" , "tiger:zip_right", "tiger:zip_left" )];
+
+(
+  // get cycle route relatoins
+  // get cycleways
+  way[highway=primary]({{bbox}});
+  way[highway=secondary]({{bbox}});
+  way[highway=tertiaty]({{bbox}});
+  way[highway=unclassified]({{bbox}});
+  way[highway=residential]({{bbox}});
+);
+
+out center;
+
+```
+
+
+```{r}
+streets <- read_delim("data/southern_streets.txt", 
+    "\t", escape_double = FALSE, col_names = c("id", "lat", "lon", "type", "st_name", "name"), 
+    trim_ws = TRUE, skip = 1)
+
+streets <- streets %>% 
+  filter(!is.na(st_name)) %>% 
+  mutate(st_name_clean = str_remove_all(st_name, "Drive|Avenue|Street|Trail|Lane|Way|Road|Highway|Place|Court"),
+         st_name_clean = str_trim(st_name_clean), 
+         confederate = ifelse(st_name_clean %in% c("Lee", "Davis", "Forrest", "Jackson", "Stonewall"), 1, 0),
+         union = ifelse(st_name_clean %in% c("Lincoln", "Grant", "Sherman"), 1, 0))
+
+```
+
+```{r}
+streets %>% 
+  count(confederate)
+```
+0.2736633 % of streets
+```{r}
+streets %>% 
+  count(union)
+
+```
+

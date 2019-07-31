@@ -1,7 +1,7 @@
 Code
 ================
 Martin Kosík
-27 červenec, 2019
+31 červenec, 2019
 
 ``` r
 knitr::opts_chunk$set(echo = TRUE)
@@ -263,3 +263,73 @@ lm(monuments_dummy ~ march + pslave1860, data = county_data) %>%
 #lm(monuments ~ march + pslave1860, data = county_data) %>% 
 #  summary()
 ```
+
+``` osm
+/*
+This shows the cycleway and cycleroute network.
+*/
+
+[out:csv(
+   ::"id", ::"lat", highway, name, "tiger:name_base" , "tiger:zip_right", "tiger:zip_left" )];
+
+(
+  // get cycle route relatoins
+  // get cycleways
+  way[highway=primary]({{bbox}});
+  way[highway=secondary]({{bbox}});
+  way[highway=tertiaty]({{bbox}});
+  way[highway=unclassified]({{bbox}});
+  way[highway=residential]({{bbox}});
+);
+
+out center;
+```
+
+``` r
+streets <- read_delim("data/southern_streets.txt", 
+    "\t", escape_double = FALSE, col_names = c("id", "lat", "lon", "type", "st_name", "name"), 
+    trim_ws = TRUE, skip = 1)
+```
+
+    ## Parsed with column specification:
+    ## cols(
+    ##   id = col_integer(),
+    ##   lat = col_double(),
+    ##   lon = col_double(),
+    ##   type = col_character(),
+    ##   st_name = col_character(),
+    ##   name = col_character()
+    ## )
+
+``` r
+streets <- streets %>% 
+  filter(!is.na(st_name)) %>% 
+  mutate(st_name_clean = str_remove_all(st_name, "Drive|Avenue|Street|Trail|Lane|Way|Road|Highway|Place|Court"),
+         st_name_clean = str_trim(st_name_clean), 
+         confederate = ifelse(st_name_clean %in% c("Lee", "Davis", "Forrest", "Jackson", "Stonewall"), 1, 0),
+         union = ifelse(st_name_clean %in% c("Lincoln", "Grant", "Sherman"), 1, 0))
+```
+
+``` r
+streets %>% 
+  count(confederate)
+```
+
+    ## # A tibble: 2 x 2
+    ##   confederate      n
+    ##         <dbl>  <int>
+    ## 1           0 489198
+    ## 2           1   1062
+
+0.2736633 % of streets
+
+``` r
+streets %>% 
+  count(union)
+```
+
+    ## # A tibble: 2 x 2
+    ##   union      n
+    ##   <dbl>  <int>
+    ## 1     0 489908
+    ## 2     1    352
