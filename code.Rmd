@@ -13,12 +13,23 @@ library(tidyverse)
 library(here)
 library(sf)
 library(mapview)
+library(mapedit)
 library(USAboundaries)
+library(USAboundariesData)
 library(broom)
+library(s2)
+library(estimatr)
+library(knitr)
+library(kableExtra)
+library(modelsummary)
+library(DoubleML)
+library(data.table)
 ```
 
+## Data pre-processing
+
 ```{r}
-sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile.shp"))
+sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile_v2.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
 
 #plot(sherman_march_map)
 counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
@@ -54,29 +65,66 @@ march_buffer_5miles <- sherman_march_map %>%
   st_transform(crs = 7801) %>% 
   st_buffer(dist = 8046.72, nQuadSegs = 1) 
 
+march_buffer_5km <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 8046.72, nQuadSegs = 1) 
 
-#mapview(counties)
+  
+ # mapview(counties) %>% 
+  #editMap()
 ```
 
 ```{r}
 march_counties <- counties %>% 
   st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
   st_intersection(march_buffer_5miles) %>% 
   st_set_geometry(NULL) %>% 
   distinct(fips) %>% #count(fips, sort = T)
   dplyr::select(fips) %>% 
   mutate(march = 1)
-```
 
 
-```{r}
 counties <- counties %>% 
   left_join(march_counties, by = "fips") %>% 
   left_join(mon_by_county, by = "fips") %>% 
   mutate(march = ifelse(is.na(march), 0, march), 
          monuments_dummy = ifelse(monuments == 0, 0, 1))
+```
 
-counties %>% 
+
+```{r warning=FALSE, message=FALSE}
+county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
+
+names_by_county <- read_csv('data/full count census/southern_first_names_by_county_1930.csv')
+
+county_data <- county_data %>% 
+  mutate(fips_char = str_pad(fips, 5, pad = "0")) %>% 
+  left_join(names_by_county, by = c('fips_char' = 'fips')) #%>% View()
+
+
+
+county_data <- county_data %>% 
+  right_join(counties, by = c("fips")) %>%
+  mutate(share_southern_names_1930 =(first_name_jefferson + first_name_robert_e + first_name_robert_l + first_name_stonewall)/n_obs) 
+
+
+#county_data <- county_data %>% 
+#  full_join(counties, by = c("fips")) %>% 
+#  mutate(march = ifelse(is.na(march), 0, march))
+```
+
+
+```{r}
+county_data %>% 
+  map_dbl(~sum(is.na(.)))
+```
+
+
+## Making maps
+```{r}
+
+sm_counties_map <- counties %>% 
   ggplot(aes(fill = as.factor(march))) +
     geom_sf(color = "gray50", size = 0.5) +
     geom_sf(data = st_transform(sherman_march_map, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 1)+
@@ -85,26 +133,30 @@ counties %>%
     labs(fill = "Sherman's March") + 
     theme(legend.position="bottom")
 
+ggsave(here::here('figures/sm_counties_map.pdf'), sm_counties_map)
 
 ```
 
-
-```{r warning=FALSE, message=FALSE}
-county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
-
-county_data <- county_data %>% 
-  right_join(counties, by = c("fips"))
-
-#county_data <- county_data %>% 
-#  full_join(counties, by = c("fips")) %>% 
-#  mutate(march = ifelse(is.na(march), 0, march))
-```
 
 ```{r}
-county_data %>% 
+counties %>%
+  left_join(county_data, by = 'fips') %>% 
+    #st_transform(crs = 7801) %>% 
   ggplot(aes(fill = pslave1860)) +
     geom_sf(color = "gray50", size = 0.5) +
-    geom_sf(data = st_transform(sherman_march_map, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+  #  geom_sf(data = st_transform(counties, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+    theme_void() +
+    coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
+    labs(fill = "Proportion of slaves in 1860") +
+    scale_fill_gradient(low = "white", high = "red")
+
+
+counties %>%
+  left_join(county_data, by = 'fips') %>% 
+    #st_transform(crs = 7801) %>% 
+  ggplot(aes(fill = share_southern_names_1930)) +
+    geom_sf(color = "gray50", size = 0.5) +
+  #  geom_sf(data = st_transform(counties, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
     theme_void() +
     coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
     labs(fill = "Proportion of slaves in 1860") +
@@ -126,58 +178,175 @@ county_data %>%
 
 ```
 
+## Descriptive statistics
+```{r}
+vars_for_table_1 <- c('pslave1860')
 
+county_data %>%
+  pivot_longer(vars_for_table_1, names_to = 'variables') %>% 
+  group_by(variables) %>% 
+  summarise(mean_slave = mean(pslave1860), )
+
+county_data$march_label <- ifelse(county_data$march, "On march's path", "Off march' path")
+
+library(rvest)
+
+
+library(table1)
+
+datasummary(march_label * (pdem1860 + pslave1860 + pdem1848) ~ Mean + SD, data = county_data)
+
+?datasummary_balance
+
+#pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)
+
+table1::label(county_data$pslave1860) <- "Share of slaves in 1860"
+table1::label(county_data$pdem1848) <- "Democrats voteshare in 1848"
+
+table1::label(county_data$pdem1872) <- "Democrats voteshare in 1872"
+
+table1::label(county_data$land.ineq1860) <- "Land inequality in 1860"
+table1::label(county_data$acimp1860) <- "Acres of improv. land in 1860"
+table1::label(county_data$fvalpac1860) <- "Farm value per acre in 1860"
+table1::label(county_data$totpop1860) <- "Total population in 1860"
+table1::label(county_data$rail1860) <- "Railway access in 1860"
+table1::label(county_data$monuments_dummy) <- "Conf. monuments (dummy)"
+county_data$lynchrate_used  <- county_data$lynchrate *100
+table1::label(county_data$lynchrate_used) <- "Lynch rate"
+
+
+
+desc_table <- table1::table1(~pdem1848 +pdem1860 +pdem1872 + lynchrate_used+ monuments_dummy + pslave1860 +
+                               land.ineq1860+acimp1860
+                             + fvalpac1860 +rail1860 + totpop1860| march_label, data = county_data)
+
+desc_table_df <- as_tibble(read_html(desc_table) %>% html_table(fill=TRUE, header = T), .name_repair = 'universal')
+
+
+desc_table_df$Varaibles
+
+desc_table_df <- as_tibble(read_html(desc_table) %>% html_table(fill=TRUE), .name_repair = 'unique')
+names(desc_table_df) <- 'Varaibles'
+
+
+as_data_frame(read_html(desc_table) %>% html_table(fill=TRUE))
+
+that_cell <- c(rep(c(T, F, F, F), 4), rep(c(T, F, F), 7))
+linesep <- c(rep(c("", "", "", "\\addlinespace"), 4), rep(c("", "", "\\addlinespace"), 7))
+
+
+length(that_cell)
+
+desc_table_df$Varaibles %>% 
+  kbl('latex', digits = 3, caption = "Summary statistics", escape = T, booktabs = T, label = 'desc_stat',
+      linesep = linesep, position = 'h', align = 'lccc') %>% 
+  kable_styling(font_size = 8) %>%
+  column_spec(1, bold = that_cell) %>% 
+  #add_header_above(c(" " = 2, "Control group" = 3, "Treatment-control" = 2)) %>% 
+  save_kable(file = 'tables/desc_stats.tex')
+
+
+```
+
+
+
+## Estimation
 
 ```{r}
-
-lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-
-fit_model <- function(dep_var, controls = ""){
- lm(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
+fit_model <- function(dep_var, controls = "", iv = 0){
+  if(iv == 0){
+    
+ lm_robust(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
   tidy(conf.int = TRUE)
+    
+  } else{
+    
+ iv_robust(as.formula(paste0(dep_var, " ~ march", controls, '| sl_inst', controls)), data = county_data) %>% 
+  tidy(conf.int = TRUE)
+    
+  }
 }
 
-
-pdem <- paste0("pdem", seq(from = 1868, to = 1964, by = 4))
-
-
-
-pdem_march_coefs <- map(pdem, fit_model) %>% 
-  set_names(pdem) %>% 
-  map2(pdem, ~ mutate(.x, year = .y)) %>% 
+get_coefs <- function(dep_var_vector, controls = "", year_vec = pdem, iv = 0){
+ map(dep_var_vector, ~ fit_model(dep_var = ., controls = controls, iv = iv)) %>% 
+  set_names(year_vec) %>% 
+  map2(year_vec, ~ mutate(.x, year = .y)) %>% 
   bind_rows() %>% 
   filter(term == "march") %>% 
   mutate(year = as.numeric(str_sub(year, start = -4)))
+}
 
-```
-
-
-```{r}
-pdem_march_coefs %>% 
+plot_coefs <- function(coef_data){
+  coef_data %>% 
   ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
   geom_pointrange() + 
-  theme_bw()
-```
+  theme_bw() + geom_hline(yintercept = 0, col = "black")+
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on democratic party vote share (%)',
+       x = 'Year')+
+  theme(text = element_text(size=16))
+  
 
-
-```{r}
-pdem_march_coefs_slave_control <- map(pdem, ~ fit_model(dep_var = ., controls = "+ pslave1860")) %>% 
-  set_names(pdem) %>% 
-  map2(pdem, ~ mutate(.x, year = .y)) %>% 
-  bind_rows() %>% 
-  filter(term == "march") %>% 
-  mutate(year = as.numeric(str_sub(year, start = -4)))
+}
 
 ```
 
 ```{r}
-pdem_march_coefs_slave_control %>% 
-  ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
-  geom_pointrange() + 
-  theme_bw() + geom_hline(yintercept = 0, col = "black")
+pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
+pdem <- c(paste0("pdem", seq(from = 1848, to = 1860, by = 4)), pdem)
 
+coef_plot_no_controls <- pdem %>% 
+  get_coefs() %>% 
+  plot_coefs()
+
+ggsave('figures/pdem_coef_plot_no_controls.pdf', coef_plot_no_controls)
+
+```
+
+
+
+```{r}
+
+pdem_march_coefs_slave_control <- pdem %>% 
+  get_coefs(controls = "+ pslave1860") %>% 
+  plot_coefs()
+
+ggsave('figures/pdem_coef_plot_slave_controls.pdf', pdem_march_coefs_slave_control)
+
+```
+
+
+```{r full controls}
+
+full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) ')
+
+county_data %>% 
+  count(state.abb)
+
+pdem_march_coefs_full_controls <- pdem %>% 
+  get_coefs(controls = full_controls) %>% 
+  plot_coefs() 
+
+ggsave('figures/pdem_coef_plot_full_controls.pdf', pdem_march_coefs_full_controls)
+
+ggsave('figures/pdem_coef_plot_full_controls_pre.pdf', pdem_march_coefs_full_controls)
+
+
+```
+
+
+```{r}
+pdem_diff <- paste0('I(', pdem,  ') - pdem1860')
+
+coef_plot_diff  <- pdem_diff %>% 
+  get_coefs(controls = "+ pslave1860") %>% 
+  plot_coefs()
+
+ggsave('figures/pdem_coef_plot_slave_diff.pdf', pdem_march_coefs_slave_control)
+
+
+coef_plot_diff_no_controls  <- pdem_diff %>% 
+  get_coefs(controls = "") %>% 
+  plot_coefs()
 ```
 
 
@@ -185,10 +354,434 @@ pdem_march_coefs_slave_control %>%
 lm(monuments_dummy ~ march + pslave1860, data = county_data) %>% 
   summary()
 
-#lm(monuments ~ march + pslave1860, data = county_data) %>% 
-#  summary()
+lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
+  summary()
+
+lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>% 
+  summary()
 
 ```
+
+
+```{r}
+monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860, data = county_data)
+
+lynchrate_lm <- lm_robust(I(lynchrate * 100) ~ march + pslave1860, data = county_data)
+
+names_lm <- lm_robust(I(share_southern_names_1930 * 100) ~ march + pslave1860, data = county_data)
+
+
+monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data)
+
+summary(monuments_lm)
+
+lynchrate_lm <- lm_robust(I(lynchrate * 100) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data)
+
+
+names_lm <- lm_robust(I(share_southern_names_1930 * 100) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data)
+
+summary(names_lm)
+
+
+modelsummary(list('Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
+             coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = "All the control variables are measured as of 1860",
+             title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             stars = TRUE)
+
+modelsummary(list('Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),
+             output = "tables/other_outcomes_ols_all.tex", 
+             notes = "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors are in the parentheses.",
+             label = "tab:other_outcomes_ols_all", stars = TRUE, 
+             title = "Other outcomes - OLS")
+
+
+
+
+```
+
+
+## Difference-in-differences
+```{r}
+did_no_controls <- lm_robust(I(pdem1872 - pdem1860) ~ march, data = county_data %>% filter(state.abb != 'SC'))
+
+did_full_controls <- lm_robust(I(pdem1872 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
+
+did_no_controls_1900 <- lm_robust(I(pdem1900 - pdem1860) ~ march, data = county_data %>% filter(state.abb != 'SC'))
+
+did_full_controls_1900 <- lm_robust(I(pdem1900 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
+
+
+lm(I(pdem1872 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
+
+lm(I(pdem1872 - pdem1860) ~ march, data = county_data )
+
+modelsummary(list('(1)' = did_no_controls, '(2)' = did_full_controls), 
+             coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = "All the control variables are measured as of 1860",
+             title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             stars = TRUE)
+
+gt_tab <- modelsummary(list('(1)' = did_no_controls, '(2)' = did_full_controls, 
+                            '(3)' = did_no_controls_1900, '(4)' = did_full_controls_1900), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),
+           #  output = "tables/diff_in_diff.tex", 
+              output = "gt", 
+             notes = "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors are in the parentheses. South Carolina counties were excluded due to absence of popular vote in 1860",
+             label = "tab:did", stars = TRUE, 
+             title = "Democratic vote share difference")
+gt_tab %>% 
+  tab_spanner(label = '1860-1872', columns = 2:3) %>%
+  tab_spanner(label = '1860-1900', columns = 4:5) %>% 
+    gtsave('diff_in_diff_more_years.tex', path = here('tables'))
+
+
+
+library(gt)
+```
+
+
+## Instrumental variable
+```{r}
+straight_line_inst <- editMap()
+
+
+saveRDS(straight_line_inst, file = here::here("maps/straight_line_inst.RData"))
+
+
+```
+
+
+```{r}
+straight_line_inst <- readRDS(here::here("maps/straight_line_inst.RData"))
+
+
+straight_line_buffer_20km <- straight_line_inst %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 20000, nQuadSegs = 1) 
+
+#mapview(straight_line_buffer_20km)
+
+
+inst_counties <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
+  st_intersection(straight_line_buffer_20km) %>% 
+  st_set_geometry(NULL) %>% 
+  distinct(fips) %>% #count(fips, sort = T)
+  dplyr::select(fips) %>% 
+  mutate(sl_inst = 1)
+
+
+
+county_data <- county_data %>% 
+  left_join(inst_counties, by = "fips") %>% 
+  mutate(sl_inst = ifelse(is.na(sl_inst), 0, sl_inst))
+
+```
+
+```{r}
+
+exo_vars <- '+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)'
+
+iv_out <- iv_robust(pdem1900 ~ march + pslave1860 | sl_inst + pslave1860, data = county_data)
+summary(iv_out)
+
+
+iv_dem_share <- pdem %>% 
+  get_coefs(controls = exo_vars, iv = 1) %>% 
+  plot_coefs()
+
+
+ggsave('figures/pdem_coef_plot_iv_controls.pdf', iv_dem_share)
+ggsave('figures/pdem_coef_plot_iv_controls_pre.pdf', iv_dem_share)
+
+```
+
+
+
+```{r}
+iv_robust(monuments_dummy ~ march + pslave1860 | sl_inst + pslave1860, data = county_data) %>% 
+  summary()
+
+lm_robust(march ~ pslave1860 + sl_inst  + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data) %>% 
+  summary()
+
+library(AER)
+
+iv_reg_sum <- ivreg(monuments_dummy ~ march + pslave1860 | sl_inst + pslave1860, data = county_data) %>% 
+  summary(diagnostics = T)
+
+iv_reg_sum$diagnostics[1,3]
+
+
+lynchrate_iv <- iv_robust(as.formula(str_c("I(lynchrate * 100) ~", 'march', exo_vars, "|sl_inst", exo_vars)),
+                          data = county_data) 
+
+
+monuments_iv <- iv_robust(as.formula(str_c("monuments_dummy ~", 'march', exo_vars, "|sl_inst", exo_vars)),
+                          data = county_data) 
+
+
+modelsummary(list('Monuments' = monuments_iv, 'Lynch rate' = lynchrate_iv), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),
+             output = "tables/other_outcomes_iv_all.tex", 
+             notes = "All the exogenous variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors are in the parentheses.",
+             label = "tab:other_outcomes_iv_all", stars = TRUE, 
+             title = "Other outcomes - IV")
+
+
+#https://www.r-bloggers.com/2014/05/stacking-regressions-latex-tables-with-r-and-stargazer/
+
+lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
+  summary()
+
+lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>% 
+  summary()
+
+```
+
+
+Placebo IV
+```{r}
+urb_pop <- read_csv("data/nhgis0001_csv/nhgis0001_ds14_1860_county.csv")
+
+urb_pop <- urb_pop %>% 
+  mutate(fips = as.numeric(str_c(str_sub(STATEA, start = 1), 
+                                 str_sub(COUNTYA, start = 2, end = -2)))) %>%filter(STATE == 'Georgia')# %>%   filter(fips == 13003)
+
+
+
+county_data <- county_data %>% 
+  left_join(urb_pop, by = "fips")
+
+county_data <- county_data %>% 
+  rename(urb_population = AHF001) %>% 
+  mutate(urban_centre = ifelse(urb_population > 0, 1, 0))
+
+
+
+
+counties
+
+counties$centroids <- counties %>% 
+  st_centroid() %>% 
+  # this is the crs from d, which has no EPSG code:
+  #st_transform(., '+proj=longlat +ellps=GRS80 +no_defs') %>%
+  # since you want the centroids in a second geometry col:
+  st_geometry()
+
+
+sample_counties <- sample(1:nrow(counties), 3)
+
+straight_line_point <- matrix(NA, nrow = 3, ncol = 2)
+straight_line_point[1,1] <- counties$centroids[sample_counties[[1]]][[1]][[1]]
+straight_line_point[1,2] <- counties$centroids[sample_counties[[1]]][[1]][[2]]
+straight_line_point[2,1] <- counties$centroids[sample_counties[[2]]][[1]][[1]]
+straight_line_point[2,2] <- counties$centroids[sample_counties[[2]]][[1]][[2]]
+straight_line_point[3,1] <- counties$centroids[sample_counties[[3]]][[1]][[1]]
+straight_line_point[3,2] <- counties$centroids[sample_counties[[3]]][[1]][[2]]
+
+
+straight_line_string <- st_linestring(x = straight_line_point)
+
+
+straight_line_inst$geometry[[1]] <- straight_line_string
+
+plot(straight_line_inst)
+
+temp <-counties$centroids[sample_counties[[1]]]
+temp[[1]][[1]]
+
+
+straight_line_string <- st_sfc(straight_line_string, crs = 4326, precision = 0)
+
+
+straight_line_buffer_20km <- straight_line_string %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 20000, nQuadSegs = 1) 
+
+plot(straight_line_buffer_20km)
+```
+
+
+
+
+
+## Double ML
+```{r}
+# Specify the data and variables for the causal model
+full_controls
+
+county_data_no_geom <- county_data %>% 
+  mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
+  filter(!is.na(pdem1900))
+
+st_geometry(county_data_no_geom) <- NULL 
+county_data_no_geom$geometry <- NULL
+
+
+names(county_data)
+
+x_controls <- str_split(full_controls, '\\+ ')[[1]]
+x_controls <- x_controls[2:length(x_controls)]
+x_controls <- c("pslave1860", "land.ineq1860", "acimp1860_log", "fvalpac1860_log", "rail1860", "totpop1860_log")
+
+dml_data <- DoubleMLData$new(as.data.table(county_data_no_geom),
+                             y_col = "pdem1900",
+                             d_cols = "march",
+                             x_cols = x_controls)
+print(dml_data_bonus)
+
+# matrix interface to DoubleMLData
+dml_data_sim = double_ml_data_from_matrix(X=X, y=y, d=d)
+dml_data_sim
+
+```
+
+
+```{r}
+library(mlr3)
+library(mlr3learners)
+# surpress messages from mlr3 package during fitting
+lgr::get_logger("mlr3")$set_threshold("warn")
+
+learner = lrn("regr.ranger", num.trees=500, mtry=4, max.depth=5, min.node.size=2)
+ml_g = learner$clone()
+ml_m = learner$clone()
+
+learner = lrn("regr.cv_glmnet", s="lambda.min")
+ml_g_sim = learner$clone()
+ml_m_sim = learner$clone()
+
+```
+
+
+```{r}
+set.seed(3141)
+obj_dml_plr = DoubleMLPLR$new(dml_data, ml_g=ml_g, ml_m=ml_m)
+obj_dml_plr$fit()
+print(obj_dml_plr)
+
+obj_dml_plr_sim = DoubleMLPLR$new(dml_data_sim, ml_g=ml_g_sim, ml_m=ml_m_sim)
+obj_dml_plr_sim$fit()
+print(obj_dml_plr_sim)
+
+
+obj_dml_plr
+```
+
+
+```{r}
+confints = rbind(obj_dml_plr$confint(), obj_dml_plr$confint(),
+                 obj_dml_plr$confint(), obj_dml_plr$confint())
+estimates = c(obj_dml_plr$coef, obj_dml_plr$coef,
+              obj_dml_plr$coef, obj_dml_plr$coef)
+
+result_plr = data.table("model" = "PLR",
+                        "ML" = c("glmnet", "ranger", "rpart", "xgboost"),
+                        "Estimate" = estimates,
+                        "lower" = confints[,1],
+                        "upper" = confints[,2])
+result_plr
+
+g_ci = ggplot(result_plr, aes(x = ML, y = Estimate, color = ML)) +
+        geom_point() +
+        geom_errorbar(aes(ymin = lower, ymax = upper, color = ML))  +
+        geom_hline(yintercept = 0, color = "grey") +
+        theme_minimal() + ylab("Coefficients and 0.95- confidence interval") +
+        xlab("") +
+        theme(axis.text.x = element_text(angle = 90), legend.position = "none",
+              text = element_text(size = 20))
+
+g_ci
+
+
+```
+
+
+```{r}
+fit_plm <- function(y_col = 'pdem1900', data = county_data){
+  county_data_no_geom <- data %>% 
+  mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
+  filter(!is.na(!!rlang::sym(y_col)))
+
+county_data_no_geom$geometry <- NULL
+
+
+dml_data <- DoubleMLData$new(as.data.table(county_data_no_geom),
+                             y_col = y_col,
+                             d_cols = "march",
+                             x_cols = x_controls)
+set.seed(3141)
+obj_dml_plr = DoubleMLPLR$new(dml_data, ml_g=ml_g, ml_m=ml_m)
+obj_dml_plr$fit()
+return(obj_dml_plr)
+}
+
+new_plm_obj <- fit_plm()
+
+new_plm_obj$coef
+
+pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
+
+new_plm_obj <- map(pdem, ~ fit_plm(.x, data = county_data))
+
+plm_coefs <- map_dbl(new_plm_obj, ~ .$coef)
+
+plm_conf_low <- map_dbl(new_plm_obj, ~ .$confint()[,1])
+plm_conf_high <- map_dbl(new_plm_obj, ~ .$confint()[,2])
+
+plm_data <- data.frame(plm_coefs = plm_coefs, plm_conf_low = plm_conf_low, plm_conf_high = plm_conf_high, 
+                       year = seq(from = 1872, to = 1964, by = 4))
+
+
+plm_coef_plot <- plm_data %>%  
+  ggplot(aes(x = year, y = plm_coefs, ymin = plm_conf_low, ymax = plm_conf_high)) + 
+  geom_pointrange() + 
+  theme_bw() + geom_hline(yintercept = 0, col = "black")+
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on democratic party vote share (%)',
+       x = 'Year')+
+  theme(text = element_text(size=16))
+
+ggsave('figures/pdem_coef_plot_plm.pdf', plm_coef_plot)
+  
+new_var <- 'pdem1872'
+
+county_data %>% 
+  filter(!is.na({{new_var}}))
+
+
+county_data %>% 
+  filter(!is.na(all_of(new_var)))
+
+!!rlang::sym()
+
+county_data %>% 
+  filter(!is.na(!!rlang::sym(new_var)))
+
+
+county_data %>% 
+  filter(!is.na(pdem1872))
+
+```
+
 
 
 ```{osm }
