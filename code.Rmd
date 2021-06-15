@@ -38,6 +38,9 @@ counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina
 counties_1860  <- us_counties(states = c("1866-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
+
+
+
 conf_mon <- read_csv(here::here("data/conf_monuments.csv")) %>% 
   separate(Coordinates, into = c("lon", "lat"), sep = ", ", remove = FALSE, convert = TRUE) %>% 
   mutate(lon = as.numeric(lon), 
@@ -96,17 +99,30 @@ counties <- counties %>%
 ```{r warning=FALSE, message=FALSE}
 county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
 
-names_by_county <- read_csv('data/full count census/southern_first_names_by_county_1930.csv')
+names_by_county_1930 <- read_csv('data/full count census/southern_first_names_by_county_1930.csv')
+names_by_county_1880 <- read_csv('data/full count census/southern_first_names_by_county_1880_final.csv')
+
 
 county_data <- county_data %>% 
   mutate(fips_char = str_pad(fips, 5, pad = "0")) %>% 
-  left_join(names_by_county, by = c('fips_char' = 'fips')) #%>% View()
+  left_join(names_by_county_1930, by = c('fips_char' = 'fips'), suffix = c('', '_1930')) %>% 
+  left_join(names_by_county_1880, by = c('fips_char' = 'fips'), suffix = c('', '_1880')) 
 
+
+names(county_data)
 
 
 county_data <- county_data %>% 
   right_join(counties, by = c("fips")) %>%
-  mutate(share_southern_names_1930 =(first_name_jefferson + first_name_robert_e + first_name_robert_l + first_name_stonewall)/n_obs) 
+  mutate(share_southern_names_1930 =(first_name_jefferson + first_name_robert_e+ 
+                                       first_name_robert_l + first_name_stonewall)/n_obs,
+         share_southern_names_1880 =(first_name_jefferson_1880 + first_name_robert_e_1880+ 
+                                       first_name_robert_l_1880 + first_name_stonewall_1880)/n_obs_1880) 
+
+county_data %>% 
+  filter(is.na(share_southern_names_1880))
+
+
 
 
 #county_data <- county_data %>% 
@@ -161,6 +177,34 @@ counties %>%
     coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
     labs(fill = "Proportion of slaves in 1860") +
     scale_fill_gradient(low = "white", high = "red")
+
+
+counties %>%
+  left_join(county_data, by = 'fips') %>% 
+    #st_transform(crs = 7801) %>% 
+  ggplot(aes(fill = share_southern_names_1880)) +
+    geom_sf(color = "gray50", size = 0.5) +
+  #  geom_sf(data = st_transform(counties, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+    theme_void() +
+    coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
+    labs(fill = "Proportion of slaves in 1860") +
+    scale_fill_gradient(low = "white", high = "red")
+
+
+counties %>%
+  left_join(county_data, by = 'fips') %>% 
+  filter(n_obs < 12000) %>% 
+    #st_transform(crs = 7801) %>% 
+  ggplot(aes(fill = n_obs_1880)) +
+    geom_sf(color = "gray50", size = 0.5) +
+  #  geom_sf(data = st_transform(counties, crs = "+proj=longlat +datum=WGS84 +no_defs"), fill = "black", size = 2)+
+    theme_void() +
+    coord_sf(crs = "+proj=longlat +datum=WGS84 +no_defs", ndiscr = F) + 
+    labs(fill = "Proportion of slaves in 1860") +
+    scale_fill_gradient(low = "white", high = "red") #+   scale_fill_continuous()
+
+
+
 
 ```
 
