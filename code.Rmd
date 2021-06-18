@@ -607,9 +607,13 @@ Placebo IV
 urb_pop <- read_csv("data/nhgis0001_csv/nhgis0001_ds14_1860_county.csv")
 
 urb_pop <- urb_pop %>% 
-  mutate(fips = as.numeric(str_c(str_sub(STATEA, start = 1), 
-                                 str_sub(COUNTYA, start = 2, end = -2)))) %>%filter(STATE == 'Georgia')# %>%   filter(fips == 13003)
+  mutate(fips = as.numeric(str_c(str_sub(STATEA, start = 1, end = -2), 
+                                 str_sub(COUNTYA, start = 1, end = -2)))) %>%filter(STATE == 'Georgia')# %>%   filter(fips == 13003)
 
+
+
+urb_pop %>% 
+  count(fips, sort = T)
 
 
 county_data <- county_data %>% 
@@ -619,6 +623,9 @@ county_data <- county_data %>%
   rename(urb_population = AHF001) %>% 
   mutate(urban_centre = ifelse(urb_population > 0, 1, 0))
 
+
+county_data %>% 
+  inner_join(urb_pop, by = "fips")
 
 
 
