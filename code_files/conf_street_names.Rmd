@@ -5,6 +5,8 @@ date: "2 7 2021"
 output: html_document
 editoroptions: 
   chunk_output_type: console
+editor_options: 
+  chunk_output_type: console
 ---
 
 
@@ -31,6 +33,20 @@ sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapef
 
 sc_roads <- st_read(here::here("maps/confederate_streets/SC/gis_osm_roads_free_1.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
 
+ge_roads <- st_read(here::here("maps/confederate_streets/Georgia/gis_osm_roads_free_1.shp")) 
+nc_roads <- st_read(here::here("maps/confederate_streets/NC/gis_osm_roads_free_1.shp")) 
+
+all_roads <- rbind(sc_roads, ge_roads, nc_roads)
+
+rm(list = c('sc_roads', 'ge_roads', 'nc_roads'))
+gc()
+
+all_roads <- all_roads %>% 
+  dplyr::select(name) %>% 
+  dplyr::filter(!is.na(name))
+
+names(all_roads)
+
 counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
@@ -43,17 +59,12 @@ sc_counties  <- us_counties(states = c("South Carolina")) %>%
 
 ```{r}
 
-sc_roads$geometry %>% 
-  head() %>% 
-  st_transform(crs = 26916) %>% 
-  st_centroid()
-
-sc_roads$geometry <- sc_roads$geometry %>% 
+all_roads$geometry <- all_roads$geometry %>% 
   st_transform(crs = 26916) %>% 
   st_centroid()
 
 
-plot(sc_roads$geometry)
+#plot(sc_roads$geometry)
 
 ```
 
@@ -70,9 +81,6 @@ John Mosby, and Bill Anderson
 
 
 ```{r}
-conf_figures <- c("Lee", "Davis", "Forrest", "Jackson", "Stonewall", "Beauregard", "Ewell",
-                  "Longstreet")
-regex_pattern <- str_c(conf_figures, collapse = ' |')
 
 sc_roads <- sc_roads %>% 
   filter(!is.na(name)) %>% 
@@ -89,12 +97,11 @@ sum(sc_roads$conf_street)
 
 ```{r}
 
-sc_roads_head <- sc_roads %>% head(100000)
 
 
-sc_counties_joined <- sc_counties %>% 
+counties_joined <- counties %>% 
   st_transform(crs = 26916) %>% 
-  st_join(sc_roads )
+  st_join(all_roads)
 
 sc_counties_joined
 
@@ -102,20 +109,29 @@ sc_counties_joined
 
 
 ```{r}
-sc_counties_joined$geometry <- NULL
+counties_joined$geometry <- NULL
+
+counties_joined %>% 
+  write_csv(here::here('maps/confederate_streets/streets_joined_with_counties.csv'))
 
 
-sc_counties_joined <- sc_counties_joined %>% 
+conf_figures <- c("Lee", "Davis", "Forrest", "Jackson", "Stonewall", "Beauregard", "Ewell",
+                  "Longstreet")
+regex_pattern <- str_c(conf_figures, collapse = ' |')
+
+
+counties_joined <- counties_joined %>% 
+  mutate(conf_street = str_detect(name.y, pattern = regex(regex_pattern, ignore_case=TRUE)) * 1)
+
+
+counties_joined <- counties_joined %>% 
   group_by(statefp, countyfp) %>% 
   summarise(n_streets = n(),
             conf_streets = sum(conf_street, na.rm = TRUE))
 
 
-sc_counties_joined
-
-sc_counties_joined$geometry %>% plot()
-
-sc_counties$geometry %>% plot()
+counties_joined %>% 
+  write_csv('data/conf_streets_by_county.csv')
 
 
 ```
