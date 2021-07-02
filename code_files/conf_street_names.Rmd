@@ -1,0 +1,122 @@
+---
+title: "Streets"
+author: "Martin Kosík"
+date: "2 7 2021"
+output: html_document
+editoroptions: 
+  chunk_output_type: console
+---
+
+
+```{r setup, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(sf)
+library(mapview)
+library(mapedit)
+library(USAboundaries)
+library(USAboundariesData)
+
+```
+
+
+OpenStreetMap data were downloaded (on July 2, 2021) from http://download.geofabrik.de/north-america/us.html
+
+
+
+```{r}
+sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile_v2.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
+
+
+sc_roads <- st_read(here::here("maps/confederate_streets/SC/gis_osm_roads_free_1.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
+
+counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
+  mutate(fips = as.numeric(paste0(statefp, countyfp)))
+
+sc_counties  <- us_counties(states = c("South Carolina")) %>% 
+  mutate(fips = as.numeric(paste0(statefp, countyfp)))
+
+
+
+```
+
+```{r}
+
+sc_roads$geometry %>% 
+  head() %>% 
+  st_transform(crs = 26916) %>% 
+  st_centroid()
+
+sc_roads$geometry <- sc_roads$geometry %>% 
+  st_transform(crs = 26916) %>% 
+  st_centroid()
+
+
+plot(sc_roads$geometry)
+
+```
+
+
+Confederate figures:
+ Robert E. Lee, Jefferson Davis, Stonewall 
+Jackson, P.G.T. Beauregard, Braxton Bragg, Jubal Early, 
+Richard Ewell, Nathan Bedford Forrest, A.P. Hill, John B. 
+Hood, Wade Hampton, Joseph E. Johnston, Joseph Brevard 
+Kershaw, James Longstreet, Robert E. Rodes, J.E.B. Stuart, 
+Earl Van Dorn, Raphael Semmes, Nathan G. Evans, George 
+Pickett, Matthew Fontaine Maury, Albert Sidney Johnston, 
+John Mosby, and Bill Anderson
+
+
+```{r}
+conf_figures <- c("Lee", "Davis", "Forrest", "Jackson", "Stonewall", "Beauregard", "Ewell",
+                  "Longstreet")
+regex_pattern <- str_c(conf_figures, collapse = ' |')
+
+sc_roads <- sc_roads %>% 
+  filter(!is.na(name)) %>% 
+  mutate(conf_street = str_detect(name, pattern = regex(regex_pattern, ignore_case=TRUE)) * 1)
+
+
+
+str_detect(c('lee street'), pattern = regex(regex_pattern, ignore_case=TRUE))
+
+#sc_roads %>% count(conf_street)
+sum(sc_roads$conf_street)
+
+```
+
+```{r}
+
+sc_roads_head <- sc_roads %>% head(100000)
+
+
+sc_counties_joined <- sc_counties %>% 
+  st_transform(crs = 26916) %>% 
+  st_join(sc_roads )
+
+sc_counties_joined
+
+```
+
+
+```{r}
+sc_counties_joined$geometry <- NULL
+
+
+sc_counties_joined <- sc_counties_joined %>% 
+  group_by(statefp, countyfp) %>% 
+  summarise(n_streets = n(),
+            conf_streets = sum(conf_street, na.rm = TRUE))
+
+
+sc_counties_joined
+
+sc_counties_joined$geometry %>% plot()
+
+sc_counties$geometry %>% plot()
+
+
+```
+
