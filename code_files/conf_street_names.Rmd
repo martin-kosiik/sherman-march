@@ -28,9 +28,6 @@ OpenStreetMap data were downloaded (on July 2, 2021) from http://download.geofab
 
 
 ```{r}
-sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile_v2.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
-
-
 sc_roads <- st_read(here::here("maps/confederate_streets/SC/gis_osm_roads_free_1.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
 
 ge_roads <- st_read(here::here("maps/confederate_streets/Georgia/gis_osm_roads_free_1.shp")) 
@@ -48,9 +45,6 @@ all_roads <- all_roads %>%
 names(all_roads)
 
 counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
-  mutate(fips = as.numeric(paste0(statefp, countyfp)))
-
-sc_counties  <- us_counties(states = c("South Carolina")) %>% 
   mutate(fips = as.numeric(paste0(statefp, countyfp)))
 
 
@@ -80,20 +74,6 @@ Pickett, Matthew Fontaine Maury, Albert Sidney Johnston,
 John Mosby, and Bill Anderson
 
 
-```{r}
-
-sc_roads <- sc_roads %>% 
-  filter(!is.na(name)) %>% 
-  mutate(conf_street = str_detect(name, pattern = regex(regex_pattern, ignore_case=TRUE)) * 1)
-
-
-
-str_detect(c('lee street'), pattern = regex(regex_pattern, ignore_case=TRUE))
-
-#sc_roads %>% count(conf_street)
-sum(sc_roads$conf_street)
-
-```
 
 ```{r}
 
@@ -103,7 +83,6 @@ counties_joined <- counties %>%
   st_transform(crs = 26916) %>% 
   st_join(all_roads)
 
-sc_counties_joined
 
 ```
 
@@ -115,19 +94,64 @@ counties_joined %>%
   write_csv(here::here('maps/confederate_streets/streets_joined_with_counties.csv'))
 
 
-conf_figures <- c("Lee", "Davis", "Forrest", "Jackson", "Stonewall", "Beauregard", "Ewell",
-                  "Longstreet")
-regex_pattern <- str_c(conf_figures, collapse = ' |')
+conf_figures <- c("Lee", "Davis", "Forrest", "Stonewall", "Beauregard", "Stonewall", "Ewell",
+                  "Hood", "Hampton", "Kershaw", "Rodes", "Van Dorn", 
+                  "Longstreet", "Maury", "Mosby")
+
+
+
+first_names <- c("Robert", "Jefferson", "Nathan","Stonewall", "P", "Braxton", "Richard", 
+                 "John", "Wade", "Joseph", "Robert", "Earl", "James", "Matthew", "John")
+
+
+last_names <- c("Lee", "Davis", "Forrest", "Stonewall", "Beauregard", "Stonewall", "Ewell",
+                  "Hood", "Hampton", "Kershaw", "Rodes", "Van Dorn", 
+                  "Longstreet", "Maury", "Mosby")
+
+length(last_names)
+
+
+str_detect("robert lee", "r.* lee|lll")
+
+str_detect("robert lee", regex("Robert .*Lee  | Jefferson .*Davis", ignore_case=TRUE))
+
+
+regex_pattern_both <- str_c(' ' ,first_names, ' .*', last_names, ' ', collapse = '|')
+
+str_detect(" robert e. lee street ", pattern = regex(regex_pattern_both, ignore_case=TRUE)) * 1
+
+
+regex_pattern_only_surname <- str_c(' ' ,conf_figures, ' ', collapse = '|')
+
+
+" Robert E Lee Street 	"
+
+str_detect("robert e. lee street", pattern = regex(regex_pattern, ignore_case=TRUE)) * 1
+
 
 
 counties_joined <- counties_joined %>% 
-  mutate(conf_street = str_detect(name.y, pattern = regex(regex_pattern, ignore_case=TRUE)) * 1)
+  mutate(
+    street_name = str_c(' ', name.y, ' '), 
+    conf_street_surname = str_detect(street_name, pattern = regex(regex_pattern_only_surname, ignore_case=TRUE)) * 1,
+    conf_street_both = str_detect(street_name, pattern = regex(regex_pattern_both, ignore_case=TRUE)) * 1,
+    )
+
+
+counties_joined %>% 
+  count(conf_street_surname)
+
+counties_joined %>% 
+  count(conf_street_both)
+
+
 
 
 counties_joined <- counties_joined %>% 
   group_by(statefp, countyfp) %>% 
   summarise(n_streets = n(),
-            conf_streets = sum(conf_street, na.rm = TRUE))
+            conf_streets_surname = sum(conf_street_surname, na.rm = TRUE),
+            conf_streets_both = sum(conf_street_both, na.rm = TRUE))
 
 
 counties_joined %>% 
