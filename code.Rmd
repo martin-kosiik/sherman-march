@@ -266,10 +266,10 @@ county_data$march_label <- ifelse(county_data$march, "On march's path", "Off mar
 
 
 table1::label(county_data$pslave1860) <- "Share of slaves in 1860"
-table1::label(county_data$pdem1848) <- "Democrats voteshare in 1848"
-table1::label(county_data$pdem1860) <- "Democrats voteshare in 1860"
-table1::label(county_data$pdem1872) <- "Democrats voteshare in 1872"
-table1::label(county_data$pdem1900) <- "Democrats voteshare in 1900"
+table1::label(county_data$pdem1848) <- "Dem. vote share in 1848"
+table1::label(county_data$pdem1860) <- "Dem. vote share in 1860"
+table1::label(county_data$pdem1872) <- "Dem. vote share in 1872"
+table1::label(county_data$pdem1900) <- "Dem. vote share in 1900"
 
 
 
@@ -324,8 +324,8 @@ table1::label(county_data$pct_conf_streets_surname) <- "Conf. streets share (%)-
 table1::label(county_data$pct_conf_streets_both) <- "Conf. streets share (%)-strict"
 county_data$pct_conf_names_1930  <- county_data$share_southern_names_1930 *100
 county_data$pct_conf_names_1880  <- county_data$share_southern_names_1880 *100
-table1::label(county_data$pct_conf_names_1930) <- "Conf. first names share (%)-1930 census"
-table1::label(county_data$pct_conf_names_1880) <- "Conf. first names share (%)-1880 census"
+table1::label(county_data$pct_conf_names_1930) <- "Conf. names share (%)-1930 census"
+table1::label(county_data$pct_conf_names_1880) <- "Conf. names share (%)-1880 census"
 
 
 desc_table <- table1::table1(~pct_conf_names_1880 + pct_conf_names_1930+  monuments_dummy+
@@ -789,8 +789,8 @@ summary(first_stage_res)
 
 gm <- list(
   list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f"),
-  list("raw" = "N", "clean" = "N", "fmt" = "%.0f"),
-  list("raw" = "statistic", "clean" = "F-statistic", "fmt" = "%.2f")
+  list("raw" = "statistic", "clean" = "F-statistic", "fmt" = "%.2f"),
+    list("raw" = "N", "clean" = "N", "fmt" = "%.0f")
 )
 
 glance(first_stage_res)
