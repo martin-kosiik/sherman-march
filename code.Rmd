@@ -126,10 +126,8 @@ names(county_data)
 
 county_data <- county_data %>% 
   right_join(counties, by = c("fips")) %>%
-  mutate(share_southern_names_1930 =(first_name_jefferson + first_name_robert_e+ 
-                                       first_name_robert_l + first_name_stonewall)/n_obs,
-         share_southern_names_1880 =(first_name_jefferson_1880 + first_name_robert_e_1880+ 
-                                       first_name_robert_l_1880 + first_name_stonewall_1880)/n_obs_1880) 
+  mutate(share_southern_names_1930 =(first_name_stonewall + first_name_robert_e+ first_name_braxton +first_name_jubal+ first_name_robert_l)/n_obs,
+         share_southern_names_1880 =(first_name_stonewall_1880 + first_name_robert_e_1880+ first_name_braxton_1880 +first_name_jubal_1880+ first_name_robert_l_1880)/n_obs_1880) 
 
 county_data %>% 
   filter(is.na(share_southern_names_1880))
@@ -476,14 +474,16 @@ lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>%
 
 monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
 
-summary(monuments_lm)
 
-lynchrate_lm <- lm_robust(I(lynchrate * 100) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+county_data$lynchrate_times_100 <- county_data$lynchrate * 100
 
+lynchrate_lm <- lm_robust(lynchrate_times_100 ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
 
-names_lm_1930 <- lm_robust(I(share_southern_names_1930 * 100) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb, data = county_data)
+county_data$share_southern_names_1930_pct <- county_data$share_southern_names_1930 * 100
+names_lm_1930 <- lm_robust(share_southern_names_1930_pct ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb, data = county_data)
 
-names_lm_1880 <- lm_robust(I(share_southern_names_1880 * 100) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+county_data$share_southern_names_1880_pct <- county_data$share_southern_names_1880 * 100
+names_lm_1880 <- lm_robust(share_southern_names_1880_pct ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
 
 names(county_data)
 
@@ -496,16 +496,25 @@ summary(streets_lm)
 
 
 
-
 gm <- list(
-  list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f"),
-  list("raw" = "N", "clean" = "N", "fmt" = "%.0f")
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
 )
 
 glance(streets_lm)
 
+glance_custom.lm_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
+
+
+
 # check year in lynchings
-note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all speciifications. First names (1880)	is the share of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 cesus is used. Street names is the share of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
 
 modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = names_lm_1930,
                   "Street names" = streets_lm, 'Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
@@ -525,9 +534,10 @@ modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = n
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
-             title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             title = "Other outcomes - OLS results \\label{tab:other_outcomes_iv_all_ss}", label = F
+             #label = "tab:other_outcomes_ols_all", 
              coef_omit = "^state", gof_map = gm,
-             stars = TRUE, output = "tables/other_outcomes_ols_all.tex")
+             stars = TRUE, output = "tables/other_outcomes_ols_all.tex", escape=F)
 
 
 modelsummary(list('Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
@@ -651,97 +661,56 @@ ggsave('figures/pdem_coef_plot_iv_controls_pre.pdf', iv_dem_share)
 
 
 
-```{r}
-iv_robust(monuments_dummy ~ march + pslave1860 | sl_inst + pslave1860, data = county_data) %>% 
-  summary()
-
-lm_robust(march ~ pslave1860 + sl_inst  + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data) %>% 
-  summary()
-
-library(AER)
-
-iv_reg_sum <- ivreg(monuments_dummy ~ march + pslave1860 | sl_inst + pslave1860, data = county_data) %>% 
-  summary(diagnostics = T)
-
-iv_reg_sum$diagnostics[1,3]
 
 
-lynchrate_iv <- iv_robust(as.formula(str_c("I(lynchrate * 100) ~", 'march', exo_vars, "|sl_inst", exo_vars)),
+```{r second stage tables}
+
+lynchrate_iv <- iv_robust(as.formula(str_c("lynchrate_times_100  ~", 'march', exo_vars, "|sl_inst", exo_vars)),
                           data = county_data) 
 
 
 monuments_iv <- iv_robust(as.formula(str_c("monuments_dummy ~", 'march', exo_vars, "|sl_inst", exo_vars)),
                           data = county_data) 
 
-
-modelsummary(list('Monuments' = monuments_iv, 'Lynch rate' = lynchrate_iv), 
-             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
-                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
-                           "log(acimp1860)" = "Log of acres of improved land"),
-             output = "tables/other_outcomes_iv_all.tex", 
-             notes = "All the exogenous variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors are in the parentheses.",
-             label = "tab:other_outcomes_iv_all", stars = TRUE, 
-             title = "Other outcomes - IV")
-
-
-#https://www.r-bloggers.com/2014/05/stacking-regressions-latex-tables-with-r-and-stargazer/
-
-lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-```
-
-
-```{r second stage}
-
-lynchrate_iv <- iv_robust(as.formula(str_c("I(lynchrate * 100) ~", 'march', exo_vars, "|sl_inst", exo_vars)),
+names_iv_1930 <- iv_robust(as.formula(str_c("share_southern_names_1930_pct ~", 'march', exo_vars, "|sl_inst", exo_vars)),
                           data = county_data) 
 
 
-monuments_iv <- iv_robust(as.formula(str_c("monuments_dummy ~", 'march', exo_vars, "|sl_inst", exo_vars)),
-                          data = county_data) 
-
-names_iv_1930 <- iv_robust(as.formula(str_c("I(share_southern_names_1930 * 100) ~", 'march', exo_vars, "|sl_inst", exo_vars)),
-                          data = county_data) 
-
-
-names_iv_1880 <- iv_robust(as.formula(str_c("I(share_southern_names_1880 * 100) ~", 'march', exo_vars, "|sl_inst", exo_vars)),
+names_iv_1880 <- iv_robust(as.formula(str_c("share_southern_names_1880_pct ~", 'march', exo_vars, "|sl_inst", exo_vars)),
                           data = county_data) 
 
 
 streets_iv <- iv_robust(as.formula(str_c("pct_conf_streets_surname ~", 'march', exo_vars, "|sl_inst", exo_vars)),
                           data = county_data) 
 
-augment(streets_iv)
 
 summary(streets_iv)
 
 #streets_iv$
 
 
-#glance_custom.iv_robust <- function(x) {
-#    dv <- as.character(formula(x)[2])
-#    out <- tibble::tibble(`Dep. variable mean:` = dv)
-#    return(out)
-#}
-
+glance_custom.iv_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
 
 
 gm <- list(
-  list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f"),
-  list("raw" = "N", "clean" = "N", "fmt" = "%.0f")
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
 )
+
+
 
 glance(streets_lm)
 
 glance_custom(streets_lm)
 
 # check year in lynchings
-note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC variance estimator are in the parentheses. State fixed effects are included in all speciifications. First names (1880)	is the share of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 cesus is used. Street names is the share of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
 
 modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = names_iv_1930,
                   "Street names" = streets_iv, 'Monuments' = monuments_iv, 'Lynch rate' = lynchrate_iv), 
@@ -761,9 +730,13 @@ modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = n
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
-             title = "Other outcomes - IV - second stage", label = "tab:other_outcomes_iv_all_ss", 
+             title = "Other outcomes - IV - second stage \\label{tab:other_outcomes_iv_all_ss}", label = F,
+             #label = "tab:other_outcomes_iv_all_ss", 
              coef_omit = "^state", gof_map = gm,
-             stars = TRUE, output = "tables/other_outcomes_iv_all_ss.tex")
+             stars = TRUE, output = "tables/other_outcomes_iv_all_ss.tex", escape=F)
+
+#https://www.r-bloggers.com/2014/05/stacking-regressions-latex-tables-with-r-and-stargazer/
+
 
 ```
 
