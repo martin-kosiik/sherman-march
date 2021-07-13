@@ -382,20 +382,35 @@ plot_coefs <- function(coef_data){
   ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
   geom_pointrange() + 
   theme_bw() + geom_hline(yintercept = 0, col = "black")+
-  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on democratic party vote share (%)',
+    geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on Democratic Party vote share (%)',
        x = 'Year')+
-  theme(text = element_text(size=16))
+    theme_minimal()+
+  theme(axis.line = element_line(size = 1),
+        axis.ticks.x = element_line(size = 1, colour = "gray"), 
+        axis.ticks.y = element_line(size = 1, colour = "gray"),
+                   axis.ticks.length = unit(5, "pt"),
+       # axis.ticks.length = unit(-0.3, "lines"),
+      #  axis.ticks.margin = unit(0.5, "lines"),
+        #axis.ticks.length=unit(.25, "cm"),
+      #  panel.grid.major.x = element_blank(), 
+      #  panel.grid.minor.x = element_blank(), 
+        #axis.ticks.margin = unit(0.5, "lines"),
+        text = element_text(size=16)#, axis.text.x = element_text(angle = x_labels_angle, hjust = x_labels_hjust)
+        )
   
 
 }
 
 ```
 
+
+### OLS
 ```{r}
 pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
 pdem <- c(paste0("pdem", seq(from = 1848, to = 1860, by = 4)), pdem)
 
-coef_plot_no_controls <- pdem %>% 
+coef_plot_no_controls<- pdem %>% 
   get_coefs() %>% 
   plot_coefs()
 
@@ -418,7 +433,7 @@ ggsave('figures/pdem_coef_plot_slave_controls.pdf', pdem_march_coefs_slave_contr
 
 ```{r full controls}
 
-full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) ')
+full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb')
 
 county_data %>% 
   count(state.abb)
@@ -464,14 +479,7 @@ lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>%
 ```
 
 
-```{r}
-#monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860, data = county_data)
-
-#lynchrate_lm <- lm_robust(I(lynchrate * 100) ~ march + pslave1860, data = county_data)
-
-#names_lm <- lm_robust(I(share_southern_names_1930 * 100) ~ march + pslave1860, data = county_data)
-
-
+```{r ols other outcomes table}
 monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
 
 
@@ -534,23 +542,10 @@ modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = n
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
-             title = "Other outcomes - OLS results \\label{tab:other_outcomes_iv_all_ss}", label = F
+             title = "Other outcomes - OLS results \\label{tab:other_outcomes_iv_all_ss}", label = F,
              #label = "tab:other_outcomes_ols_all", 
              coef_omit = "^state", gof_map = gm,
              stars = TRUE, output = "tables/other_outcomes_ols_all.tex", escape=F)
-
-
-modelsummary(list('Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
-             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
-                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
-                           "log(acimp1860)" = "Log of acres of improved land"),
-             output = "tables/other_outcomes_ols_all.tex", 
-             notes = note_text,
-             label = "tab:other_outcomes_ols_all", stars = TRUE, 
-             title = "Other outcomes - OLS")
-
-
 
 
 ```
