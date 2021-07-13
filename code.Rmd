@@ -111,6 +111,11 @@ counties <- counties %>%
 ```{r warning=FALSE, message=FALSE}
 county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
 
+county_data_cces <- read_csv("data/acharya_et_al_2016_cces_white_countydata.csv") %>% 
+  dplyr::select(fips, dem, rep, affirm, resent)
+
+
+
 names_by_county_1930 <- read_csv('data/full count census/southern_first_names_by_county_1930.csv')
 names_by_county_1880 <- read_csv('data/full count census/southern_first_names_by_county_1880_final.csv')
 
@@ -118,7 +123,8 @@ names_by_county_1880 <- read_csv('data/full count census/southern_first_names_by
 county_data <- county_data %>% 
   mutate(fips_char = str_pad(fips, 5, pad = "0")) %>% 
   left_join(names_by_county_1930, by = c('fips_char' = 'fips'), suffix = c('', '_1930')) %>% 
-  left_join(names_by_county_1880, by = c('fips_char' = 'fips'), suffix = c('', '_1880')) 
+  left_join(names_by_county_1880, by = c('fips_char' = 'fips'), suffix = c('', '_1880')) %>% 
+  left_join(county_data_cces, by = "fips")
 
 
 names(county_data)
@@ -472,6 +478,59 @@ coef_plot_diff_no_controls  <- pdem_diff %>%
   plot_coefs()
 ```
 
+```{r recent political outcomes}
+"wht.obama.vote"
+wht_obama_vote_lm <- lm_robust(as.formula(paste0("wht.obama.vote", " ~ march", full_controls)), data = county_data)
+
+dem_lm <- lm_robust(as.formula(paste0("dem", " ~ march", full_controls)), data = county_data)
+rep_lm <- lm_robust(as.formula(paste0("rep", " ~ march", full_controls)), data = county_data)
+
+affirm_lm <- lm_robust(as.formula(paste0("affirm", " ~ march", full_controls)), data = county_data)
+
+
+
+gm <- list(
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
+)
+
+
+glance_custom.lm_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
+
+
+
+# check year in lynchings
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+
+modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
+                  "Affirm. action" = affirm_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE)
+
+modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
+                  "Affirm. action" = affirm_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE, output = "tables/cces_outcomes_ols_all.tex", escape=F)
+
+```
 
 
 ```{r ols other outcomes table}
