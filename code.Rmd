@@ -132,7 +132,8 @@ county_data <- county_data %>%
 county_data %>% 
   filter(is.na(share_southern_names_1880))
 
-
+county_data <- county_data %>% 
+  rename(wall1968 = wallace68.alt, thur1948 = thurmond48)
 
 
 #county_data <- county_data %>% 
@@ -353,20 +354,10 @@ desc_table_df$Varaibles %>%
 
 ## Estimation
 
+
+Now let's try to add the results of Storm Thurmond in 1948 and George Wallace in 1968.
 ```{r}
-fit_model <- function(dep_var, controls = "", iv = 0){
-  if(iv == 0){
-    
- lm_robust(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
-  tidy(conf.int = TRUE)
-    
-  } else{
-    
- iv_robust(as.formula(paste0(dep_var, " ~ march", controls, '| sl_inst', controls)), data = county_data) %>% 
-  tidy(conf.int = TRUE)
-    
-  }
-}
+
 
 get_coefs <- function(dep_var_vector, controls = "", year_vec = pdem, iv = 0){
  map(dep_var_vector, ~ fit_model(dep_var = ., controls = controls, iv = iv)) %>% 
@@ -374,16 +365,23 @@ get_coefs <- function(dep_var_vector, controls = "", year_vec = pdem, iv = 0){
   map2(year_vec, ~ mutate(.x, year = .y)) %>% 
   bind_rows() %>% 
   filter(term == "march") %>% 
-  mutate(year = as.numeric(str_sub(year, start = -4)))
+  mutate(
+    party_type = str_sub(year, end = 4) %>% 
+      fct_recode("Democrat" = "pdem", "Thurmond" = "thur", "Wallace" = "wall"), 
+    year = as.numeric(str_sub(year, start = -4)),
+    year = ifelse(party_type == "Thurmond", 1948.4, year),# Add slight offset to Thurmond that the conf. int. can be distinguished
+    year = ifelse(party_type == "Democrat" & year == 1948, 1947.4, year)
+    )
 }
+
 
 plot_coefs <- function(coef_data){
   coef_data %>% 
-  ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high)) + 
+  ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high, col = party_type)) + 
   geom_pointrange() + 
   theme_bw() + geom_hline(yintercept = 0, col = "black")+
     geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
-  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on Democratic Party vote share (%)',
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of presidential candidates (%)',
        x = 'Year')+
     theme_minimal()+
   theme(axis.line = element_line(size = 1),
@@ -397,18 +395,27 @@ plot_coefs <- function(coef_data){
       #  panel.grid.minor.x = element_blank(), 
         #axis.ticks.margin = unit(0.5, "lines"),
         text = element_text(size=16)#, axis.text.x = element_text(angle = x_labels_angle, hjust = x_labels_hjust)
-        )
-  
-
+        )+
+  scale_color_manual(values = c("Democrat" = "black",
+                                "Wallace"="blue",
+                                "Thurmond"="green"), 
+                     name = "Candidate") 
 }
 
 ```
 
 
+
 ### OLS
 ```{r}
+
+as.numeric(str_sub(c("wall1968", "thur1948"), start = -4))
+
 pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
 pdem <- c(paste0("pdem", seq(from = 1848, to = 1860, by = 4)), pdem)
+pdem <- c(pdem, "wall1968", "thur1948")
+
+
 
 coef_plot_no_controls<- pdem %>% 
   get_coefs() %>% 
@@ -442,7 +449,7 @@ pdem_march_coefs_full_controls <- pdem %>%
   get_coefs(controls = full_controls) %>% 
   plot_coefs() 
 
-ggsave('figures/pdem_coef_plot_full_controls.pdf', pdem_march_coefs_full_controls)
+#ggsave('figures/pdem_coef_plot_full_controls.pdf', pdem_march_coefs_full_controls)
 
 ggsave('figures/pdem_coef_plot_full_controls_pre.pdf', pdem_march_coefs_full_controls)
 
@@ -649,7 +656,7 @@ iv_dem_share <- pdem %>%
   plot_coefs()
 
 
-ggsave('figures/pdem_coef_plot_iv_controls.pdf', iv_dem_share)
+#ggsave('figures/pdem_coef_plot_iv_controls.pdf', iv_dem_share)
 ggsave('figures/pdem_coef_plot_iv_controls_pre.pdf', iv_dem_share)
 
 ```
