@@ -460,6 +460,14 @@ pdem_march_coefs_full_controls <- pdem %>%
 ggsave('figures/pdem_coef_plot_full_controls_pre.pdf', pdem_march_coefs_full_controls)
 
 
+
+
+```
+
+
+```{r}
+county_data %>% 
+  summarize(thur1948 = mean(thur1948, na.rm=T))
 ```
 
 
@@ -785,6 +793,61 @@ modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = n
 
 #https://www.r-bloggers.com/2014/05/stacking-regressions-latex-tables-with-r-and-stargazer/
 
+
+```
+
+
+```{r iv recent political outcomes}
+"wht.obama.vote"
+wht_obama_vote_iv <- iv_robust(as.formula(str_c("wht.obama.vote ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+
+dem_iv <- iv_robust(as.formula(paste0("dem ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+rep_iv <- iv_robust(as.formula(paste0("rep ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+
+affirm_iv <- iv_robust(as.formula(paste0("affirm ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+
+
+
+gm <- list(
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
+)
+
+
+glance_custom.iv_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
+
+
+
+# check year in lynchings
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+
+modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
+                  "Affirm. action" = affirm_iv), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE)
+
+modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
+                  "Affirm. action" = affirm_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "CCES outcomes - IV results", label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE, output = "tables/cces_outcomes_iv_all.tex", escape=F)
 
 ```
 
