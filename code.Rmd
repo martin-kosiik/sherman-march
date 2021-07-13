@@ -381,13 +381,14 @@ plot_coefs <- function(coef_data){
   geom_pointrange() + 
   theme_bw() + geom_hline(yintercept = 0, col = "black")+
     geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
-  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of presidential candidates (%)',
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of pres. candidates (%)',
        x = 'Year')+
     theme_minimal()+
   theme(axis.line = element_line(size = 1),
         axis.ticks.x = element_line(size = 1, colour = "gray"), 
         axis.ticks.y = element_line(size = 1, colour = "gray"),
                    axis.ticks.length = unit(5, "pt"),
+        legend.position="bottom",
        # axis.ticks.length = unit(-0.3, "lines"),
       #  axis.ticks.margin = unit(0.5, "lines"),
         #axis.ticks.length=unit(.25, "cm"),
@@ -442,8 +443,6 @@ ggsave('figures/pdem_coef_plot_slave_controls.pdf', pdem_march_coefs_slave_contr
 
 full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb')
 
-county_data %>% 
-  count(state.abb)
 
 pdem_march_coefs_full_controls <- pdem %>% 
   get_coefs(controls = full_controls) %>% 
@@ -648,7 +647,6 @@ county_data <- county_data %>%
 exo_vars <- '+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb'
 
 iv_out <- iv_robust(pdem1900 ~ march + pslave1860 | sl_inst + pslave1860, data = county_data)
-summary(iv_out)
 
 
 iv_dem_share <- pdem %>% 
