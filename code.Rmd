@@ -357,7 +357,19 @@ desc_table_df$Varaibles %>%
 
 Now let's try to add the results of Storm Thurmond in 1948 and George Wallace in 1968.
 ```{r}
-
+fit_model <- function(dep_var, controls = "", iv = 0){
+  if(iv == 0){
+    
+ lm_robust(as.formula(paste0(dep_var, " ~ march", controls)), data = county_data) %>% 
+  tidy(conf.int = TRUE)
+    
+  } else{
+    
+ iv_robust(as.formula(paste0(dep_var, " ~ march", controls, '| sl_inst', controls)), data = county_data) %>% 
+  tidy(conf.int = TRUE)
+    
+  }
+}
 
 get_coefs <- function(dep_var_vector, controls = "", year_vec = pdem, iv = 0){
  map(dep_var_vector, ~ fit_model(dep_var = ., controls = controls, iv = iv)) %>% 
@@ -428,17 +440,6 @@ ggsave('figures/pdem_coef_plot_no_controls.pdf', coef_plot_no_controls)
 
 
 
-```{r}
-
-pdem_march_coefs_slave_control <- pdem %>% 
-  get_coefs(controls = "+ pslave1860") %>% 
-  plot_coefs()
-
-ggsave('figures/pdem_coef_plot_slave_controls.pdf', pdem_march_coefs_slave_control)
-
-```
-
-
 ```{r full controls}
 
 full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb')
@@ -471,18 +472,6 @@ coef_plot_diff_no_controls  <- pdem_diff %>%
   plot_coefs()
 ```
 
-
-```{r}
-lm(monuments_dummy ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-lm(lynchrate ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-lm(I(pdem1900 - pdem1860) ~ march + pslave1860, data = county_data) %>% 
-  summary()
-
-```
 
 
 ```{r ols other outcomes table}
