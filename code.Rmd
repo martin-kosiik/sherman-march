@@ -26,6 +26,8 @@ library(DoubleML)
 library(data.table)
 library(rvest)
 library(table1)
+library(gt)
+
 ```
 
 ## Data pre-processing
@@ -615,47 +617,67 @@ modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = n
 
 ## Difference-in-differences
 ```{r}
-did_no_controls <- lm_robust(I(pdem1872 - pdem1860) ~ march, data = county_data %>% filter(state.abb != 'SC'))
-
-did_full_controls <- lm_robust(I(pdem1872 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
-
-did_no_controls_1900 <- lm_robust(I(pdem1900 - pdem1860) ~ march, data = county_data %>% filter(state.abb != 'SC'))
-
-did_full_controls_1900 <- lm_robust(I(pdem1900 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
 
 
-lm(I(pdem1872 - pdem1860) ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860), data = county_data %>% filter(state.abb != 'SC'))
+county_data$pdem_diff_1872 <- county_data$pdem1872 - county_data$pdem1860
 
-lm(I(pdem1872 - pdem1860) ~ march, data = county_data )
+did_no_controls <- lm_robust(pdem_diff_1872 ~ march, data = county_data %>% filter(state.abb != 'SC'))
+
+did_full_controls <- lm_robust(pdem_diff_1872 ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb, data = county_data %>% filter(state.abb != 'SC'))
+
+
+county_data$pdem_diff_1900 <- county_data$pdem1900 - county_data$pdem1860
+
+did_no_controls_1900 <- lm_robust(pdem_diff_1900 ~ march, data = county_data %>% filter(state.abb != 'SC'))
+
+did_full_controls_1900 <- lm_robust(pdem_diff_1900 ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb, data = county_data %>% filter(state.abb != 'SC'))
+
+
+gm <- list(
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
+)
+
+
+glance_custom.lm_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
+
+
+
 
 modelsummary(list('(1)' = did_no_controls, '(2)' = did_full_controls), 
              coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
-                           "log(acimp1860)" = "Log of acres of improved land"),   
-             notes = "All the control variables are measured as of 1860",
+                           "log(acimp1860)" = "Log of acres of improved land", "state.abbNC" = "North Carolina dummy"),   
+             notes = "All the control variables are measured as of 1860", gof_map = gm,
              title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
              stars = TRUE)
 
 gt_tab <- modelsummary(list('(1)' = did_no_controls, '(2)' = did_full_controls, 
                             '(3)' = did_no_controls_1900, '(4)' = did_full_controls_1900), 
-             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share", 
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per acre",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
-                           "log(acimp1860)" = "Log of acres of improved land"),
+                           "log(acimp1860)" = "Log of acres of improved land", "state.abbNC" = "North Carolina dummy"),
+             gof_map = gm, 
            #  output = "tables/diff_in_diff.tex", 
               output = "gt", 
-             notes = "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors are in the parentheses. South Carolina counties were excluded due to absence of popular vote in 1860",
+             notes = "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC variance estimator are in the parentheses. South Carolina counties were excluded due to the absence of popular vote in 1860 and before. ",
              label = "tab:did", stars = TRUE, 
-             title = "Democratic vote share difference")
+             title = "Democratic vote share difference (in percantage points)")
 gt_tab %>% 
   tab_spanner(label = '1860-1872', columns = 2:3) %>%
   tab_spanner(label = '1860-1900', columns = 4:5) %>% 
-    gtsave('diff_in_diff_more_years.tex', path = here('tables'))
+    gtsave('diff_in_diff_more_years.tex', path = here('tables'), escape=F)
 
 
 
-library(gt)
 ```
 
 
@@ -838,16 +860,20 @@ modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
              coef_omit = "^state", gof_map = gm,
              stars = TRUE)
 
-modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
-                  "Affirm. action" = affirm_lm), 
+
+modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
+                  "Affirm. action" = affirm_iv), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
-             title = "CCES outcomes - IV results", label = "tab:other_outcomes_ols_all", 
+             title = "CCES outcomes - IV results", label = "tab:other_outcomes_iv_all", 
              coef_omit = "^state", gof_map = gm,
              stars = TRUE, output = "tables/cces_outcomes_iv_all.tex", escape=F)
+
+
+
 
 ```
 
