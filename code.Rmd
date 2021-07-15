@@ -402,7 +402,7 @@ plot_coefs <- function(coef_data){
   coef_data %>% 
   ggplot(aes(x = year, y = estimate, ymin = conf.low, ymax = conf.high, col = party_type)) + 
   geom_pointrange() + 
-  theme_bw() + geom_hline(yintercept = 0, col = "black")+
+  geom_hline(yintercept = 0, col = "black")+
     geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
   labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of pres. candidates (%)',
        x = 'Year')+
@@ -432,9 +432,6 @@ plot_coefs <- function(coef_data){
 
 ### OLS
 ```{r}
-
-as.numeric(str_sub(c("wall1968", "thur1948"), start = -4))
-
 pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
 pdem <- c(paste0("pdem", seq(from = 1848, to = 1860, by = 4)), pdem)
 pdem <- c(pdem, "wall1968", "thur1948")
@@ -527,7 +524,7 @@ modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
                   "Affirm. action" = affirm_lm), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
@@ -538,7 +535,7 @@ modelsummary(list("Dem. share (%)" = dem_lm, "Rep. share (%)" = rep_lm,
                   "Affirm. action sup. (%)" = affirm_lm), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
@@ -597,7 +594,7 @@ modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = n
                   "Street names" = streets_lm, 'Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
@@ -608,7 +605,7 @@ modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = n
                   "Street names" = streets_lm, 'Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "Other outcomes - OLS results \\label{tab:other_outcomes_iv_all_ss}", label = F,
@@ -658,7 +655,7 @@ glance_custom.lm_robust <- function(x, ...) {
 modelsummary(list('(1)' = did_no_controls, '(2)' = did_full_controls), 
              coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land", "state.abbNC" = "North Carolina dummy"),   
              notes = "All the control variables are measured as of 1860", gof_map = gm,
              title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
@@ -799,7 +796,7 @@ modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = n
                   "Street names" = streets_iv, 'Monuments' = monuments_iv, 'Lynch rate' = lynchrate_iv), 
              coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "Other outcomes - IV - second stage", label = "tab:other_outcomes_iv_all_ss", 
@@ -810,7 +807,7 @@ modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = n
                   "Street names" = streets_iv, 'Monuments' = monuments_iv, 'Lynch rate' = lynchrate_iv), 
              coef_rename=c("march"="Sherman march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "Other outcomes - IV - second stage \\label{tab:other_outcomes_iv_all_ss}", label = F,
@@ -853,11 +850,11 @@ glance_custom.iv_robust <- function(x, ...) {
 # check year in lynchings
 note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. Dem. (Rep.) share is defined as the proportion of respondents in a given county who identify as a Democrat (Republican). Affirm. action sup. us defined as the share of respondents in a given county who support affirmative action policies. All three dependent variables are based on answers in CCES surveys and the shares are calculated only among white respondents. "
 
-modelsummary(list("Dem. share (%)" = dem_iv, "Rep. share (%)" = rep_iv,
+modelsummary(list("Dem. share (\%)" = dem_iv, "Rep. share (\%)" = rep_iv,
                   "Affirm. action sup. (%)" = affirm_iv), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "CCES outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
@@ -869,7 +866,7 @@ modelsummary(list("Dem. share (%)" = dem_iv, "Rep. share (%)" = rep_iv,
                   "Affirm. action sup. (%)" = affirm_iv), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "CCES outcomes - IV results", label = "tab:other_outcomes_iv_all", 
@@ -913,7 +910,7 @@ glance(first_stage_res)
 modelsummary(list("Sherman's march" = first_stage_res), 
              coef_rename=c("sl_inst"="Straight-line instrument", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "IV - first stage", label = "tab:iv_fs", 
@@ -924,7 +921,7 @@ modelsummary(list("Sherman's march" = first_stage_res),
 modelsummary(list("Sherman's march" = first_stage_res), 
              coef_rename=c("sl_inst"="Straight-line instrument", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
-                           "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
                            "log(acimp1860)" = "Log of acres of improved land"),   
              notes = note_text,
              title = "IV - first stage", label = "tab:iv_fs", 
@@ -1015,35 +1012,6 @@ plot(straight_line_buffer_20km)
 
 
 ## Double ML
-```{r}
-# Specify the data and variables for the causal model
-full_controls
-
-county_data_no_geom <- county_data %>% 
-  mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
-  filter(!is.na(pdem1900))
-
-st_geometry(county_data_no_geom) <- NULL 
-county_data_no_geom$geometry <- NULL
-
-
-names(county_data)
-
-x_controls <- str_split(full_controls, '\\+ ')[[1]]
-x_controls <- x_controls[2:length(x_controls)]
-x_controls <- c("pslave1860", "land.ineq1860", "acimp1860_log", "fvalpac1860_log", "rail1860", "totpop1860_log")
-
-dml_data <- DoubleMLData$new(as.data.table(county_data_no_geom),
-                             y_col = "pdem1900",
-                             d_cols = "march",
-                             x_cols = x_controls)
-print(dml_data_bonus)
-
-# matrix interface to DoubleMLData
-dml_data_sim = double_ml_data_from_matrix(X=X, y=y, d=d)
-dml_data_sim
-
-```
 
 
 ```{r}
@@ -1107,7 +1075,17 @@ g_ci
 
 
 ```{r}
-fit_plm <- function(y_col = 'pdem1900', data = county_data){
+
+x_controls <- c("pslave1860", "land.ineq1860", "acimp1860_log", "fvalpac1860_log", "rail1860", "totpop1860_log")
+pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
+pdem <- c(paste0("pdem", seq(from = 1848, to = 1860, by = 4)), pdem)
+pdem <- c(pdem, "wall1968", "thur1948")
+
+pres_years <- c(seq(from = 1848, to = 1860, by = 4), seq(from = 1872, to = 1964, by = 4), 1968, 1948)
+party_type <- c(rep("Democrat", length(pres_years)-2), "Wallace", "Thurmond")
+
+
+fit_plm <- function(y_col = 'pdem1900', data = county_data, x_control_vec = x_controls){
   county_data_no_geom <- data %>% 
   mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
   filter(!is.na(!!rlang::sym(y_col)))
@@ -1118,18 +1096,17 @@ county_data_no_geom$geometry <- NULL
 dml_data <- DoubleMLData$new(as.data.table(county_data_no_geom),
                              y_col = y_col,
                              d_cols = "march",
-                             x_cols = x_controls)
+                             x_cols = x_control_vec)
 set.seed(3141)
 obj_dml_plr = DoubleMLPLR$new(dml_data, ml_g=ml_g, ml_m=ml_m)
 obj_dml_plr$fit()
 return(obj_dml_plr)
 }
 
-new_plm_obj <- fit_plm()
+#new_plm_obj <- fit_plm()
 
-new_plm_obj$coef
+#new_plm_obj$coef
 
-pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
 
 new_plm_obj <- map(pdem, ~ fit_plm(.x, data = county_data))
 
@@ -1139,16 +1116,35 @@ plm_conf_low <- map_dbl(new_plm_obj, ~ .$confint()[,1])
 plm_conf_high <- map_dbl(new_plm_obj, ~ .$confint()[,2])
 
 plm_data <- data.frame(plm_coefs = plm_coefs, plm_conf_low = plm_conf_low, plm_conf_high = plm_conf_high, 
-                       year = seq(from = 1872, to = 1964, by = 4))
+                       year = pres_years, cand_party_type = party_type)
 
 
 plm_coef_plot <- plm_data %>%  
-  ggplot(aes(x = year, y = plm_coefs, ymin = plm_conf_low, ymax = plm_conf_high)) + 
+  ggplot(aes(x = year, y = plm_coefs, ymin = plm_conf_low, ymax = plm_conf_high, col = cand_party_type)) + 
   geom_pointrange() + 
-  theme_bw() + geom_hline(yintercept = 0, col = "black")+
-  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on democratic party vote share (%)',
+   geom_hline(yintercept = 0, col = "black")+
+    geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of pres. candidates (%)',
        x = 'Year')+
-  theme(text = element_text(size=16))
+    theme_minimal()+
+  theme(axis.line = element_line(size = 1),
+        axis.ticks.x = element_line(size = 1, colour = "gray"), 
+        axis.ticks.y = element_line(size = 1, colour = "gray"),
+                   axis.ticks.length = unit(5, "pt"),
+        legend.position="bottom",
+       # axis.ticks.length = unit(-0.3, "lines"),
+      #  axis.ticks.margin = unit(0.5, "lines"),
+        #axis.ticks.length=unit(.25, "cm"),
+      #  panel.grid.major.x = element_blank(), 
+      #  panel.grid.minor.x = element_blank(), 
+        #axis.ticks.margin = unit(0.5, "lines"),
+        text = element_text(size=16)#, axis.text.x = element_text(angle = x_labels_angle, hjust = x_labels_hjust)
+        )+
+  scale_color_manual(values = c("Democrat" = "black",
+                                "Wallace"="blue",
+                                "Thurmond"="green"), 
+                     name = "Candidate")
+
 
 ggsave('figures/pdem_coef_plot_plm.pdf', plm_coef_plot)
   
