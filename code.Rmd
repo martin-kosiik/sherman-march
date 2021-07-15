@@ -147,6 +147,9 @@ county_data <- county_data %>%
 #county_data <- county_data %>% 
 #  full_join(counties, by = c("fips")) %>% 
 #  mutate(march = ifelse(is.na(march), 0, march))
+
+full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb')
+
 ```
 
 
@@ -489,13 +492,15 @@ coef_plot_diff_no_controls  <- pdem_diff %>%
 ```
 
 ```{r recent political outcomes}
-"wht.obama.vote"
 wht_obama_vote_lm <- lm_robust(as.formula(paste0("wht.obama.vote", " ~ march", full_controls)), data = county_data)
 
-dem_lm <- lm_robust(as.formula(paste0("dem", " ~ march", full_controls)), data = county_data)
-rep_lm <- lm_robust(as.formula(paste0("rep", " ~ march", full_controls)), data = county_data)
+county_data$dem_pct <- county_data$dem * 100
+county_data$rep_pct <- county_data$rep * 100
+county_data$affirm_pct <- county_data$affirm * 100
 
-affirm_lm <- lm_robust(as.formula(paste0("affirm", " ~ march", full_controls)), data = county_data)
+dem_lm <- lm_robust(as.formula(paste0("dem_pct", " ~ march", full_controls)), data = county_data)
+rep_lm <- lm_robust(as.formula(paste0("rep_pct", " ~ march", full_controls)), data = county_data)
+affirm_lm <- lm_robust(as.formula(paste0("affirm_pct", " ~ march", full_controls)), data = county_data)
 
 
 
@@ -516,7 +521,7 @@ glance_custom.lm_robust <- function(x, ...) {
 
 
 # check year in lynchings
-note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. Dem. (Rep.) share is defined as the proportion of respondents in a given county who identify as a Democrat (Republican). Affirm. action sup. us defined as the share of respondents in a given county who support affirmative action policies. All three dependent variables are based on answers in CCES surveys and the shares are calculated only among white respondents.  "
 
 modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
                   "Affirm. action" = affirm_lm), 
@@ -529,8 +534,8 @@ modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
              coef_omit = "^state", gof_map = gm,
              stars = TRUE)
 
-modelsummary(list("Prop. Democrat" = dem_lm, "Prop. Republican" = rep_lm,
-                  "Affirm. action" = affirm_lm), 
+modelsummary(list("Dem. share (%)" = dem_lm, "Rep. share (%)" = rep_lm,
+                  "Affirm. action sup. (%)" = affirm_lm), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
@@ -820,13 +825,12 @@ modelsummary(list("First names (1880)" = names_iv_1880, "First names (1930)" = n
 
 
 ```{r iv recent political outcomes}
-"wht.obama.vote"
 wht_obama_vote_iv <- iv_robust(as.formula(str_c("wht.obama.vote ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
 
-dem_iv <- iv_robust(as.formula(paste0("dem ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
-rep_iv <- iv_robust(as.formula(paste0("rep ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+dem_iv <- iv_robust(as.formula(paste0("dem_pct ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+rep_iv <- iv_robust(as.formula(paste0("rep_pct ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
 
-affirm_iv <- iv_robust(as.formula(paste0("affirm ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
+affirm_iv <- iv_robust(as.formula(paste0("affirm_pct ~", 'march', exo_vars, "|sl_inst", exo_vars)), data = county_data)
 
 
 
@@ -847,10 +851,10 @@ glance_custom.iv_robust <- function(x, ...) {
 
 
 # check year in lynchings
-note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included in all specifications. Dem. (Rep.) share is defined as the proportion of respondents in a given county who identify as a Democrat (Republican). Affirm. action sup. us defined as the share of respondents in a given county who support affirmative action policies. All three dependent variables are based on answers in CCES surveys and the shares are calculated only among white respondents. "
 
-modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
-                  "Affirm. action" = affirm_iv), 
+modelsummary(list("Dem. share (%)" = dem_iv, "Rep. share (%)" = rep_iv,
+                  "Affirm. action sup. (%)" = affirm_iv), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
@@ -861,8 +865,8 @@ modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
              stars = TRUE)
 
 
-modelsummary(list("Prop. Democrat" = dem_iv, "Prop. Republican" = rep_iv,
-                  "Affirm. action" = affirm_iv), 
+modelsummary(list("Dem. share (%)" = dem_iv, "Rep. share (%)" = rep_iv,
+                  "Affirm. action sup. (%)" = affirm_iv), 
              coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
                            "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
                            "rail1860" = "Railway access", "log(totpop1860)" = "Lof of total population",
