@@ -1,0 +1,350 @@
+---
+title: "Robustness checks"
+author: "Martin Kosík"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(sf)
+library(mapview)
+library(mapedit)
+library(USAboundaries)
+library(USAboundariesData)
+library(broom)
+library(s2)
+library(estimatr)
+library(knitr)
+library(kableExtra)
+library(modelsummary)
+library(DoubleML)
+library(data.table)
+library(rvest)
+library(table1)
+library(gt)
+
+```
+
+## Data pre-processing
+
+```{r}
+sherman_march_map <- st_read(here::here("maps/sherman_march/sherman_march_shapefile_v2.shp")) #%>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
+
+#plot(sherman_march_map)
+counties  <- us_counties(states = c("Georgia", "North Carolina", "South Carolina")) %>% 
+  mutate(fips = as.numeric(paste0(statefp, countyfp)))
+
+counties_1860  <- us_counties(states = c("1866-09-17", "Georgia", "North Carolina", "South Carolina")) %>% 
+  mutate(fips = as.numeric(paste0(statefp, countyfp)))
+
+
+
+
+conf_mon <- read_csv(here::here("data/conf_monuments.csv")) %>% 
+  separate(Coordinates, into = c("lon", "lat"), sep = ", ", remove = FALSE, convert = TRUE) %>% 
+  mutate(lon = as.numeric(lon), 
+         lat = as.numeric(lat)) %>% 
+  filter(!is.na(lon)) %>% 
+  st_as_sf(coords = c("lat","lon"), crs = 4326) # %>% st_set_crs("+proj=longlat +datum=WGS84 +no_defs")
+
+#mapview(conf_mon)
+
+
+mon_by_county <- counties %>% 
+  st_join(conf_mon) %>% 
+  st_set_geometry(NULL) %>% 
+  group_by(fips) %>% 
+  summarize(monuments = sum(!is.na(feature_name))) 
+  
+```
+
+```{r}
+march_buffer_10km <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 10000, nQuadSegs = 1) 
+
+
+march_buffer_5miles <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 8046.72, nQuadSegs = 1) 
+
+march_buffer_10miles <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 2* 8046.72, nQuadSegs = 1) 
+
+march_buffer_20miles <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 4* 8046.72, nQuadSegs = 1) 
+
+march_buffer_50miles <- sherman_march_map %>% 
+  st_transform(crs = 7801) %>% 
+  st_buffer(dist = 10* 8046.72, nQuadSegs = 1) 
+  
+
+
+ # mapview(counties) %>% 
+  #editMap()
+```
+
+```{r}
+march_counties <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
+  st_intersection(march_buffer_5miles) %>% 
+  st_set_geometry(NULL) %>% 
+  distinct(fips) %>% #count(fips, sort = T)
+  dplyr::select(fips) %>% 
+  mutate(march = 1)
+
+
+march_counties_10m <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
+  st_intersection(march_buffer_10miles) %>% 
+  st_set_geometry(NULL) %>% 
+  distinct(fips) %>% #count(fips, sort = T)
+  dplyr::select(fips) %>% 
+  mutate(march_10m = 1)
+
+
+march_counties_20m <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
+  st_intersection(march_buffer_20miles) %>% 
+  st_set_geometry(NULL) %>% 
+  distinct(fips) %>% #count(fips, sort = T)
+  dplyr::select(fips) %>% 
+  mutate(march_20m = 1)
+
+
+march_counties_50m <- counties %>% 
+  st_transform(crs = 7801) %>% 
+  #st_as_s2() %>% 
+  st_intersection(march_buffer_50miles) %>% 
+  st_set_geometry(NULL) %>% 
+  distinct(fips) %>% #count(fips, sort = T)
+  dplyr::select(fips) %>% 
+  mutate(march_50m = 1)
+
+
+
+
+conf_streets <-  read_csv('data/conf_streets_by_county.csv') %>% 
+  mutate(fips = as.numeric(str_c(statefp, countyfp)),
+         pct_conf_streets_surname = (conf_streets_surname/n_streets) * 100, 
+         pct_conf_streets_both = (conf_streets_both/n_streets) * 100) %>% 
+  dplyr::select(-c(statefp, countyfp))
+  
+
+
+counties <- counties %>% 
+  left_join(march_counties, by = "fips") %>% 
+  left_join(march_counties_10m, by = "fips") %>% 
+  left_join(march_counties_20m, by = "fips") %>% 
+  left_join(march_counties_50m, by = "fips") %>% 
+  left_join(mon_by_county, by = "fips") %>% 
+  left_join(conf_streets, by = "fips") %>% 
+  mutate(monuments_dummy = ifelse(monuments == 0, 0, 1)) %>% 
+  mutate_at(all_of(c("march", "march_10m", "march_20m", "march_50m")), ~ ifelse(is.na(.x), 0, .x))
+```
+
+
+```{r warning=FALSE, message=FALSE}
+county_data <- read_csv("data/acharya_et_al_2016_county_data.csv")
+
+county_data_cces <- read_csv("data/acharya_et_al_2016_cces_white_countydata.csv") %>% 
+  dplyr::select(fips, dem, rep, affirm, resent)
+
+
+
+names_by_county_1930 <- read_csv('data/full count census/southern_first_names_by_county_1930.csv')
+names_by_county_1880 <- read_csv('data/full count census/southern_first_names_by_county_1880_final.csv')
+
+
+county_data <- county_data %>% 
+  mutate(fips_char = str_pad(fips, 5, pad = "0")) %>% 
+  left_join(names_by_county_1930, by = c('fips_char' = 'fips'), suffix = c('', '_1930')) %>% 
+  left_join(names_by_county_1880, by = c('fips_char' = 'fips'), suffix = c('', '_1880')) %>% 
+  left_join(county_data_cces, by = "fips")
+
+
+names(county_data)
+
+
+county_data <- county_data %>% 
+  right_join(counties, by = c("fips")) %>%
+  mutate(share_southern_names_1930 =(first_name_stonewall + first_name_robert_e+ first_name_braxton +first_name_jubal+ first_name_robert_l)/n_obs,
+         share_southern_names_1880 =(first_name_stonewall_1880 + first_name_robert_e_1880+ first_name_braxton_1880 +first_name_jubal_1880+ first_name_robert_l_1880)/n_obs_1880) 
+
+county_data %>% 
+  filter(is.na(share_southern_names_1880))
+
+county_data <- county_data %>% 
+  rename(wall1968 = wallace68.alt, thur1948 = thurmond48)
+
+
+#county_data <- county_data %>% 
+#  full_join(counties, by = c("fips")) %>% 
+#  mutate(march = ifelse(is.na(march), 0, march))
+
+full_controls <- c('+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb')
+
+
+```
+
+
+
+```{r}
+monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+
+monuments_lm <- lm_robust(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+
+
+
+county_data$lynchrate_times_100 <- county_data$lynchrate * 100
+
+lynchrate_lm <- lm_robust(lynchrate_times_100 ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+
+county_data$share_southern_names_1930_pct <- county_data$share_southern_names_1930 * 100
+names_lm_1930 <- lm_robust(share_southern_names_1930_pct ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb, data = county_data)
+
+county_data$share_southern_names_1880_pct <- county_data$share_southern_names_1880 * 100
+names_lm_1880 <- lm_robust(share_southern_names_1880_pct ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+
+names(county_data)
+
+streets_lm <- lm_robust(pct_conf_streets_surname ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860) + state.abb , data = county_data)
+
+names(county_data)
+
+
+summary(streets_lm)
+
+
+
+gm <- list(
+    list("raw" = "N", "clean" = "Number of observations", "fmt" = "%.0f"),
+    list("raw" = "dv_mean", "clean" = "Dep. var. mean", "fmt" = "%.3f"),
+    list("raw" = "r.squared", "clean" = "$R^2$", "fmt" = "%.3f")
+)
+
+glance(streets_lm)
+
+glance_custom.lm_robust <- function(x, ...) {
+    dv <- as.character(formula(x)[2])
+    dv_mean <- mean(county_data %>% pull(dv), na.rm = TRUE)
+    out <- data.frame("dv_mean" = dv_mean)
+    return(out)
+}
+
+
+
+# check year in lynchings
+note_text <- "The standard set of controls was included in all specifications. The standard errors based on HC2 variance estimator are in the parentheses. First names (1880)	is the share  (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents. "
+
+modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = names_lm_1930,
+                  "Street names" = streets_lm, 'Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "Other outcomes - OLS results", label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE)
+
+modelsummary(list("First names (1880)" = names_lm_1880, "First names (1930)" = names_lm_1930,
+                  "Street names" = streets_lm, 'Monuments' = monuments_lm, 'Lynch rate' = lynchrate_lm), 
+             coef_rename=c("march"="Sherman's march", "pslave1860"="Slave share",
+                           "land.ineq1860" = "Land inequality", "log(fvalpac1860)" = "Log of farm value per ac.",
+                           "rail1860" = "Railway access", "log(totpop1860)" = "Log of total population",
+                           "log(acimp1860)" = "Log of acres of improved land"),   
+             notes = note_text,
+             title = "Other outcomes - OLS results \\label{tab:other_outcomes_iv_all_ss}", label = F,
+             #label = "tab:other_outcomes_ols_all", 
+             coef_omit = "^state", gof_map = gm,
+             stars = TRUE, output = "tables/other_outcomes_ols_all.tex", escape=F)
+
+```
+
+
+```{r}
+
+model1 <- hp ~ mpg
+model2 <- hp ~ mpg + drat
+model3 <- hp ~ mpg + drat + wt
+
+model_names <- c("No controls" = model1, 
+                 "drat" = model2, 
+                 "drat + wt" = model3)
+
+models_by_cyl <- function(x, ...) {
+  dat <- filter(mtcars, cyl == x)
+  
+  map(model_names, ~ lm(.x, dat)) %>% 
+    modelsummary(coef_map = c("mpg" = paste(x, "cylinders")),
+                 gof_omit = ".*", 
+                 ...)
+}
+
+rows <- map_dfr(c(6, 8), ~ models_by_cyl(.x, output = "data.frame")) %>% 
+  select(term, names(model_names))
+
+models_by_cyl(4, add_rows = rows)
+
+```
+
+```{r}
+models_by_cyl <- function(x) {
+  dat <- county_data
+  list("First names (1880)" = 
+    lm_robust(as.formula(str_c("share_southern_names_1880_pct ~", x,  "+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb")), dat),
+    "First names (1930)" = 
+    lm_robust(as.formula(str_c("share_southern_names_1930_pct ~", x,  "+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb")), dat),
+    "Street names" = 
+    lm_robust(as.formula(str_c("pct_conf_streets_surname ~", x,  "+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb")), dat),
+  "Monuments" = lm_robust(as.formula(str_c("monuments_dummy ~", x,  "+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb")), dat),
+   "Lynch rate" = lm_robust(as.formula(str_c("pct_conf_streets_surname ~", x,  "+ pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb")), dat)
+   )
+}
+
+tab1 <- modelsummary(models_by_cyl("march_10m"),
+                     coef_map = c("march_10m" = "Sherman's march (10 miles)"),
+                     gof_omit = ".*", 
+                     output = "data.frame")
+
+tab2 <- modelsummary(models_by_cyl("march_20m"),
+                     coef_map = c("march_20m" = "Sherman's march (20 miles)"),
+                     gof_omit = ".*",
+                     output = "data.frame")
+
+
+tab3 <- modelsummary(models_by_cyl("march_50m"),
+                     coef_map = c("march_50m" = "Sherman's march (50 miles)"),
+                     gof_omit = ".*",
+                     output = "data.frame")
+
+
+
+tab <- bind_rows(tab1, tab2, tab3) %>% 
+  select(-statistic, -part)
+tab[c(2, 4, 6), 1] <- rep("", 3)
+colnames(tab)[1] <- ""
+
+tab %>% 
+  kbl("latex", caption = "Other outcomes - OLS - different treatment definitions", booktabs = T, 
+      linesep = "", label = "other_out_ols_diff_treat_def") %>% 
+  kable_styling(latex_options = c("hold_position")) %>% 
+  add_footnote(note_text) %>% 
+    write_file(here::here("tables/other_out_ols_diff_treat_def.tex"))
+
+
+
+
+```
+
