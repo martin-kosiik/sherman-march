@@ -1023,10 +1023,11 @@ lgr::get_logger("mlr3")$set_threshold("warn")
 learner = lrn("regr.ranger", num.trees=500, mtry=4, max.depth=5, min.node.size=2)
 ml_g = learner$clone()
 ml_m = learner$clone()
+ml_r = learner$clone()
 
-learner = lrn("regr.cv_glmnet", s="lambda.min")
-ml_g_sim = learner$clone()
-ml_m_sim = learner$clone()
+#learner = lrn("regr.cv_glmnet", s="lambda.min")
+#ml_g_sim = learner$clone()
+#ml_m_sim = learner$clone()
 
 ```
 
@@ -1170,51 +1171,74 @@ county_data %>%
 
 
 
-```{osm }
-/*
-This shows the cycleway and cycleroute network.
-*/
-
-[out:csv(
-   ::"id", ::"lat", highway, name, "tiger:name_base" , "tiger:zip_right", "tiger:zip_left" )];
-
-(
-  // get cycle route relatoins
-  // get cycleways
-  way[highway=primary]({{bbox}});
-  way[highway=secondary]({{bbox}});
-  way[highway=tertiaty]({{bbox}});
-  way[highway=unclassified]({{bbox}});
-  way[highway=residential]({{bbox}});
-);
-
-out center;
-
-```
-
-
 ```{r}
-streets <- read_delim("data/southern_streets.txt", 
-    "\t", escape_double = FALSE, col_names = c("id", "lat", "lon", "type", "st_name", "name"), 
-    trim_ws = TRUE, skip = 1)
+fit_plm_iv <- function(y_col = 'pdem1900', data = county_data, x_control_vec = x_controls, z_var = "sl_inst"){
+  county_data_no_geom <- data %>% 
+  mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
+  filter(!is.na(!!rlang::sym(y_col)))
 
-streets <- streets %>% 
-  filter(!is.na(st_name)) %>% 
-  mutate(st_name_clean = str_remove_all(st_name, "Drive|Avenue|Street|Trail|Lane|Way|Road|Highway|Place|Court"),
-         st_name_clean = str_trim(st_name_clean), 
-         confederate = ifelse(st_name_clean %in% c("Lee", "Davis", "Forrest", "Jackson", "Stonewall"), 1, 0),
-         union = ifelse(st_name_clean %in% c("Lincoln", "Grant", "Sherman"), 1, 0))
+county_data_no_geom$geometry <- NULL
 
-```
 
-```{r}
-streets %>% 
-  count(confederate)
-```
-0.2736633 % of streets
-```{r}
-streets %>% 
-  count(union)
+dml_data <- DoubleMLData$new(as.data.table(county_data_no_geom),
+                             y_col = y_col,
+                             d_cols = "march",
+                             x_cols = x_control_vec,
+                             z_cols = z_var)
+set.seed(3141)
+obj_dml_plr = DoubleMLPLIV$new(dml_data, ml_g=ml_g, ml_m=ml_m, ml_r=ml_r)
+obj_dml_plr$fit()
+return(obj_dml_plr)
+}
+
+#new_plm_obj <- fit_plm_iv()
+
+#new_plm_obj$coef
+
+new_plm_obj <- map(pdem, ~ fit_plm_iv(.x, data = county_data))
+
+plm_coefs <- map_dbl(new_plm_obj, ~ .$coef)
+
+plm_conf_low <- map_dbl(new_plm_obj, ~ .$confint()[,1])
+plm_conf_high <- map_dbl(new_plm_obj, ~ .$confint()[,2])
+
+pres_years <- c(seq(from = 1848, to = 1860, by = 4), seq(from = 1872, to = 1964, by = 4), 1968, 1948.5)
+
+
+plm_data <- data.frame(plm_coefs = plm_coefs, plm_conf_low = plm_conf_low, plm_conf_high = plm_conf_high, 
+                       year = pres_years, cand_party_type = party_type)
+
+
+plm_coef_plot <- plm_data %>%  
+  ggplot(aes(x = year, y = plm_coefs, ymin = plm_conf_low, ymax = plm_conf_high, col = cand_party_type)) + 
+  geom_pointrange() + 
+   geom_hline(yintercept = 0, col = "black")+
+    geom_vline(xintercept = 1864.75, col = "red", linetype = "dashed")+
+  labs(caption = 'The error bars show 95% confidence intervals', y = 'Effect on vote shares of pres. candidates (%)',
+       x = 'Year')+
+    theme_minimal()+
+  theme(axis.line = element_line(size = 1),
+        axis.ticks.x = element_line(size = 1, colour = "gray"), 
+        axis.ticks.y = element_line(size = 1, colour = "gray"),
+                   axis.ticks.length = unit(5, "pt"),
+        legend.position="bottom",
+       # axis.ticks.length = unit(-0.3, "lines"),
+      #  axis.ticks.margin = unit(0.5, "lines"),
+        #axis.ticks.length=unit(.25, "cm"),
+      #  panel.grid.major.x = element_blank(), 
+      #  panel.grid.minor.x = element_blank(), 
+        #axis.ticks.margin = unit(0.5, "lines"),
+        text = element_text(size=16)#, axis.text.x = element_text(angle = x_labels_angle, hjust = x_labels_hjust)
+        )+
+  scale_color_manual(values = c("Democrat" = "black",
+                                "Wallace"="blue",
+                                "Thurmond"="green"), 
+                     name = "Candidate")
+
+
+ggsave('figures/pdem_coef_plot_plm_iv.pdf', plm_coef_plot)
+
+
 
 ```
 
