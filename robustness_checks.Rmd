@@ -316,18 +316,18 @@ models_by_cyl <- function(x) {
 tab1 <- modelsummary(models_by_cyl("march_10m"),
                      coef_map = c("march_10m" = "Sherman's march (10 miles)"),
                      gof_omit = ".*", 
-                     output = "data.frame")
+                     output = "data.frame", stars = TRUE)
 
 tab2 <- modelsummary(models_by_cyl("march_20m"),
                      coef_map = c("march_20m" = "Sherman's march (20 miles)"),
                      gof_omit = ".*",
-                     output = "data.frame")
+                     output = "data.frame", stars = TRUE)
 
 
 tab3 <- modelsummary(models_by_cyl("march_50m"),
                      coef_map = c("march_50m" = "Sherman's march (50 miles)"),
                      gof_omit = ".*",
-                     output = "data.frame")
+                     output = "data.frame", stars = TRUE)
 
 
 
