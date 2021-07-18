@@ -27,8 +27,21 @@ library(data.table)
 library(rvest)
 library(table1)
 library(gt)
+library(RStata)
+#options("RStata.StataPath" = "C:/Users/marti/Downloads/Stata-MP-16.0/")
+options("RStata.StataPath" =  "\"C:\\Users\\marti\\Downloads\\Stata-MP-16.0\\Stata-MP-16.0\\StataMP-64\"")
+
+options("RStata.StataVersion" = 16)
+#library(LATEtest)
+library(robomit)
+```
+
+```{r}
+library(devtools)
+install_github("farbmacher/LATEtest")
 
 ```
+
 
 ## Data pre-processing
 
@@ -884,10 +897,12 @@ modelsummary(list("Dem. share (%)" = dem_iv, "Rep. share (%)" = rep_iv,
 
 library(AER)
 
-iv_reg_sum <- ivreg(monuments_dummy ~ march + pslave1860 | sl_inst + pslave1860, data = county_data) %>% 
+iv_reg_sum <- ivreg(monuments_dummy ~ march + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb | sl_inst + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data) %>% 
   summary(diagnostics = T)
 
 iv_reg_sum$diagnostics[1,3]
+summary(iv_reg_sum)
+
 
 note_text <- "All the control variables show their value as of 1860 (i.e. slave share in 1860 etc.). The standard errors based on HC2 variance estimator are in the parentheses. State fixed effects are included. "
 
@@ -895,6 +910,11 @@ note_text <- "All the control variables show their value as of 1860 (i.e. slave 
 
 first_stage_res <- lm_robust(march ~ sl_inst + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
 
+summary(first_stage_res)
+
+first_stage_res_lm <- lm(march ~ sl_inst + pslave1860 + land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb, data = county_data)
+
+summary(first_stage_res_lm)
 
 summary(first_stage_res)
 
@@ -936,6 +956,114 @@ first_stage_res
 ```
 
 
+```{r weak instrument test}
+#x <- data.frame(a = rnorm(3), b = letters[1:3])
+#stata("sum a", data.in = x)
+county_data_no_gem <- as.data.frame(county_data)
+county_data_no_gem$geometry <- NULL
+
+county_data_no_gem <- county_data_no_gem %>% 
+  rename(land_ineq1860 = land.ineq1860, state_abb = state.abb) %>% 
+  mutate(log_totpop1860 = log(totpop1860),
+         log_acimp1860 = log(acimp1860),
+         log_fvalpac1860 = log(fvalpac1860),
+         nc_d = (state_abb == "NC")*1,
+         sc_d = (state_abb == "SC")*1,
+         state_abb = as.factor(state_abb))
+
+stata("reg pdem1900 march pslave1860", data.in = county_data_no_gem)
+
+stata("ssc install weakivtest", data.in = county_data_no_gem)
+stata("ssc install avar", data.in = county_data_no_gem)
+
+
+stata("ivregress 2sls pct_conf_streets_surname pslave1860 land_ineq1860 log_totpop1860 log_acimp1860 rail1860 nc sc log_fvalpac1860 (march = sl_inst)
+      weakivtest ", data.in = county_data_no_gem)
+
+county_data_no_gem %>% 
+  count(state_abb)
+
+```
+
+
+
+```{r}
+county_data_no_gem <- county_data_no_gem %>% 
+  rename(Y = pdem1900, D = march, Z = sl_inst)
+```
+
+
+```{r}
+n = 3000; p = 3; rho=0.3
+u <- rnorm(n)
+v <- rho*u + sqrt(1-rho^2)*rnorm(n)
+X <- matrix(rnorm(n * p), n, p)
+colnames(X) <- paste("Xvar", 1:p, sep="")
+Z <- rbinom(n, size = 1, prob = 0.5)
+D<-as.numeric(0.2 * Z + v > 0)
+
+# Local violation of the exclusion restriction:
+gamma <- as.numeric(ifelse(X[, 2] < -1, 1.25, 0))
+Y <- as.vector(D + gamma * Z + u)
+data <- as.data.frame(cbind(Y,D,Z,X))
+
+# Perform test:
+covars = paste0(colnames(data)[4:ncol(data)])
+test <- LATEtest(data = data, covars = covars, subsets = 4, alpha = 0.05)
+test
+
+```
+
+```{r}
+# load data, e.g. the in-build mtcars dataset
+data("mtcars")
+data_oster <- mtcars
+# preview of data
+head(data_oster)
+# load robomit
+require(robomit)
+# estimate bootstrapped beta*s
+betas <-  o_beta_boot_inf(y = "mpg", # dependent variable
+x = "wt", # independent treatment variable
+con = "hp + qsec", # related control variables
+delta = 1, # delta
+R2max = 0.9, # maximum R-square
+sim = 100, # number of simulations
+obs = 30, # draws per simulatio
+rep = FALSE, # bootstrapping with or without replacement
+type = "lm", # model type
+useed = 123, # seed
+CI = 95,
+data = data_oster)
+
+betas <-  o_beta_rsq(y = "mpg", # dependent variable
+x = "wt", # independent treatment variable
+con = "hp + qsec", # related control variables
+delta = 1, # delta
+type = "lm", # model type
+data = data_oster)
+
+
+deltas <- o_delta_boot_inf(y = "mpg", x = "wt", con = "hp + qsec", beta = 0, R2max = 1, sim = 100, obs = 30, rep = FALSE,
+                 CI = 95, type = "lm", useed = 123, data = data_oster)
+
+
+deltas <- o_delta_boot_inf(y = "share_southern_names_1930_pct", 
+                           x = "march",
+                           m = "pslave1860",
+                           con = "land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb", 
+                           beta = 0, 
+                           R2max = 1, 
+                           sim = 800, obs = 300, rep = TRUE,
+                 CI = 95, type = "lm", useed = 123, data = county_data)
+
+
+deltas
+
+names(county_data)
+
+county_data$share_southern_names_1930
+```
 
 
 Placebo IV
@@ -1075,7 +1203,7 @@ g_ci
 ```
 
 
-```{r}
+```{r plm coefplot}
 
 x_controls <- c("pslave1860", "land.ineq1860", "acimp1860_log", "fvalpac1860_log", "rail1860", "totpop1860_log")
 pdem <- paste0("pdem", seq(from = 1872, to = 1964, by = 4))
@@ -1171,7 +1299,7 @@ county_data %>%
 
 
 
-```{r}
+```{r plm iv coefplot}
 fit_plm_iv <- function(y_col = 'pdem1900', data = county_data, x_control_vec = x_controls, z_var = "sl_inst"){
   county_data_no_geom <- data %>% 
   mutate_at(vars(c('acimp1860', 'fvalpac1860', 'totpop1860')), list('log' = log)) %>% 
