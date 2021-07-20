@@ -1013,8 +1013,8 @@ test <- LATEtest(data = data, covars = covars, subsets = 4, alpha = 0.05)
 test
 
 ```
-
-```{r}
+### Testing coefficient stability
+```{r oster test}
 # load data, e.g. the in-build mtcars dataset
 data("mtcars")
 data_oster <- mtcars
@@ -1044,7 +1044,7 @@ type = "lm", # model type
 data = data_oster)
 
 
-deltas <- o_delta_boot_inf(y = "mpg", x = "wt", con = "hp + qsec", beta = 0, R2max = 1, sim = 100, obs = 30, rep = FALSE,
+deltas_mt <- o_delta_boot_inf(y = "mpg", x = "wt", con = "hp + qsec", beta = 0, R2max = 1, sim = 100, obs = 30, rep = FALSE,
                  CI = 95, type = "lm", useed = 123, data = data_oster)
 
 
@@ -1059,6 +1059,139 @@ deltas <- o_delta_boot_inf(y = "share_southern_names_1930_pct",
 
 
 deltas
+
+betas_names_1930 <- o_delta_boot(y = "share_southern_names_1930_pct", 
+                          x = "march",
+                          con = "land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb",
+                          m = "none",
+                          R2max = 1, 
+                          type = "lm",
+                          sim = 800, obs = 305, rep = TRUE,
+                          data = county_data)
+
+dep_var_vec <- c("pdem1900", "thur1948", "share_southern_names_1930_pct", "pct_conf_streets_surname")
+n_missing <- dep_var_vec %>% 
+  map_int(~sum(is.na(county_data[, .x])))
+n_nonmissing_obs <- 305 - n_missing
+
+
+
+
+oster_2019_est <- function(dep_var, n_obs = 350, n_sims = 1000){
+  
+
+betas_names <- o_beta_boot_inf(y = dep_var, 
+                          x = "march",
+                          con = "land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb",
+                          m = "none",
+                          delta = 1,
+                          R2max = 1, 
+                          type = "lm",
+                          sim = n_sims, obs = n_obs, rep = TRUE,
+                          CI = 95,
+                          data = county_data)
+
+
+mean_beta <- betas_names %>% 
+  filter(Name == "beta* (mean)") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+conf_low <- betas_names %>% 
+  filter(Name == "CI_95_low") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+conf_high <- betas_names %>% 
+  filter(Name == "CI_95_high") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+output_df <- data.frame("Mean_effect" = mean_beta, "conf_low" = conf_low, "conf_high" = conf_high)
+
+return(output_df)
+}
+
+
+oster_2019_est_deltas <- function(dep_var, n_obs = 350, n_sims = 1000){
+
+delta_names <- o_delta_boot_inf(y = dep_var, 
+                          x = "march",
+                          con = "land.ineq1860 + log(acimp1860) + log(fvalpac1860) + rail1860 + log(totpop1860)+ state.abb",
+                          m = "none",
+                          R2max = 1, 
+                          type = "lm",
+                          sim = n_sims, obs = n_obs, rep = TRUE,
+                          CI = 95,
+                          data = county_data)
+
+
+mean_delta <- delta_names %>% 
+  filter(Name == "delta* (mean)") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+conf_low <- delta_names %>% 
+  filter(Name == "CI_95_low") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+conf_high <- delta_names %>% 
+  filter(Name == "CI_95_high") %>% 
+  pull(Value) %>% 
+  as.numeric()
+
+output_df <- data.frame("Mean_effect" = mean_delta, "conf_low" = conf_low, "conf_high" = conf_high)
+
+return(output_df)
+}
+
+
+
+
+oster_2019_est_deltas(dep_var = "share_southern_names_1930_pct")
+
+
+betas_df <- map2(dep_var_vec, n_nonmissing_obs, ~ oster_2019_est(dep_var = .x, n_obs = .y))
+
+betas_df <- betas_df %>% 
+  bind_rows()
+
+rownames(betas_df) <- c("Democrats' share in 1900", "Thurmond's share in 1948", "Confederate first names share-1930 census",
+                        "Confederate streets share" )
+
+colnames(betas_df) <- c("Bias-adj. treat. effect", "95\\% CI (lower b.)", "95\\% CI (upper b.)")
+
+colnames(betas_df) <- c("Est. ", "95\\% CI (l.)", "95\\% CI (u.)")
+
+
+deltas_df <- map2(dep_var_vec, n_nonmissing_obs, ~ oster_2019_est_deltas(dep_var = .x, n_obs = .y))
+
+deltas_df <- deltas_df %>% 
+  bind_rows()
+
+
+colnames(deltas_df) <- c("Est.", "95\\% CI (l.) ", "95\\% CI (u.) ")
+
+merge_df <- betas_df %>% 
+  bind_cols(deltas_df)
+
+
+
+merge_df %>% 
+  kbl('latex', digits = 3, caption = "Sensitivity to unobservables using Oster (2019) methods", escape = F, 
+      booktabs = T, label = 'oster_2019',
+      position = 'h'#, align = 'cccccc'
+      ) %>% 
+#  kable_styling(font_size = 8) %>%
+ # column_spec(1, bold = that_cell) %>% 
+  add_header_above(c("Bias-adj. treament effect" = 3, "Strength of sel. on unob. ($\\delta$)" = 3)) %>% 
+  save_kable(file = 'tables/oster_2019.tex')
+
+
+
+
+betas_df
 
 names(county_data)
 
