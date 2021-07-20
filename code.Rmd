@@ -1069,11 +1069,6 @@ betas_names_1930 <- o_delta_boot(y = "share_southern_names_1930_pct",
                           sim = 800, obs = 305, rep = TRUE,
                           data = county_data)
 
-dep_var_vec <- c("pdem1900", "thur1948", "share_southern_names_1930_pct", "pct_conf_streets_surname")
-n_missing <- dep_var_vec %>% 
-  map_int(~sum(is.na(county_data[, .x])))
-n_nonmissing_obs <- 305 - n_missing
-
 
 
 
@@ -1149,7 +1144,17 @@ return(output_df)
 
 
 
-oster_2019_est_deltas(dep_var = "share_southern_names_1930_pct")
+
+dep_var_vec <- c("pdem1872" ,"pdem1900", "thur1948",
+                 "share_southern_names_1880_pct",
+                 "share_southern_names_1930_pct",
+                 "pct_conf_streets_surname", 
+                 "monuments_dummy",
+                 "lynchrate_times_100")
+n_missing <- dep_var_vec %>% 
+  map_int(~sum(is.na(county_data[, .x])))
+n_nonmissing_obs <- 305 - n_missing
+
 
 
 betas_df <- map2(dep_var_vec, n_nonmissing_obs, ~ oster_2019_est(dep_var = .x, n_obs = .y))
@@ -1157,10 +1162,19 @@ betas_df <- map2(dep_var_vec, n_nonmissing_obs, ~ oster_2019_est(dep_var = .x, n
 betas_df <- betas_df %>% 
   bind_rows()
 
-rownames(betas_df) <- c("Democrats' share in 1900", "Thurmond's share in 1948", "Confederate first names share-1930 census",
-                        "Confederate streets share" )
 
-colnames(betas_df) <- c("Bias-adj. treat. effect", "95\\% CI (lower b.)", "95\\% CI (upper b.)")
+
+
+rownames(betas_df) <- c("Democrats' share in 1872",
+                        "Democrats' share in 1900",
+                        "Thurmond's share in 1948", 
+                        "Conf. first names share-1880 census",
+                        "Conf. first names share-1930 census",
+                        "Conf. streets share",
+                        "Conf. monument dummy",
+                        "Lynch rate")
+
+#colnames(betas_df) <- c("Bias-adj. treat. effect", "95\\% CI (lower b.)", "95\\% CI (upper b.)")
 
 colnames(betas_df) <- c("Est. ", "95\\% CI (l.)", "95\\% CI (u.)")
 
@@ -1177,6 +1191,9 @@ merge_df <- betas_df %>%
   bind_cols(deltas_df)
 
 
+ 
+note_text <- "First names (1880)	is the share (in %) of whites born after 1865 in a given county with first name that we classified as Confederate in 1880 census. First names (1930) is defined the same, only 1930 census is used. Street names is the share (in %) of streets and roads in a given that contain a surname of a Confederate figure in their name. Monuments is a an indicator variable that equals one if a Confederate monument was present in a county in 2019. Lynch rate is defined as the number of lynchings in a county from 1882 to 1929 per  10,000,000 residents."
+
 
 merge_df %>% 
   kbl('latex', digits = 3, caption = "Sensitivity to unobservables using Oster (2019) methods", escape = F, 
@@ -1185,7 +1202,8 @@ merge_df %>%
       ) %>% 
 #  kable_styling(font_size = 8) %>%
  # column_spec(1, bold = that_cell) %>% 
-  add_header_above(c("Bias-adj. treament effect" = 3, "Strength of sel. on unob. ($\\delta$)" = 3)) %>% 
+  add_header_above(c(" "=1, "Bias-adj. treament effect" = 3, "Strength of sel. on unob. ($\\delta$)" = 3), escape = F) %>% 
+  add_footnote(input = note_text) %>% 
   save_kable(file = 'tables/oster_2019.tex')
 
 
