@@ -1203,7 +1203,7 @@ merge_df %>%
 #  kable_styling(font_size = 8) %>%
  # column_spec(1, bold = that_cell) %>% 
   add_header_above(c(" "=1, "Bias-adj. treament effect" = 3, "Strength of sel. on unob. ($\\delta$)" = 3), escape = F) %>% 
-  add_footnote(input = note_text) %>% 
+  add_footnote(note_text, notation = "alphabet", threeparttable = T) %>% 
   save_kable(file = 'tables/oster_2019.tex')
 
 
