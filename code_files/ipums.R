@@ -121,12 +121,7 @@ file.choose()
 ddi <- read_ipums_ddi("1880_100_percent_sample/ipumsi_00002.xml")
 data <- read_ipums_micro(ddi)
 
-data %>% 
-  head(100) %>% 
-  View()
 
-data %>% 
-  count(SEX)
 
 
 data_after_1865 <- data %>% 
@@ -142,15 +137,14 @@ data_after_1865 <- data_after_1865 %>%
 
 
 
-names_count <- data %>% 
-  count(NAMEFRST, sort = T)
+#names_count <- data %>% 
+#  count(NAMEFRST, sort = T)
 
 
 data_after_1865 <- data_after_1865 %>% 
   mutate(first_name_lower = NAMEFRST %>% str_to_lower(),
          first_name_jefferson = (str_detect(first_name_lower, 'jefferson')) * 1,
          #first_name_jefferson_d = (str_detect(first_name_lower, 'jefferson d')) * 1,
-         first_name_jeb = (str_detect(first_name_lower, 'jeb')) * 1,
          first_name_braxton = (str_detect(first_name_lower, 'braxton')) * 1,
          first_name_jubal = (str_detect(first_name_lower, 'jubal')) * 1,
          first_name_stonewall = (str_detect(first_name_lower, 'stonewall')) * 1,
@@ -171,7 +165,7 @@ names_by_county <- data_after_1865 %>%
   mutate(n_obs = 1) %>% 
   group_by(GEO1_US1880 , NHGISJOIN, COUNTYUS) %>% 
   summarize_at(vars(c('first_name_jefferson', 'first_name_stonewall', 'first_name_robert_e',
-                      'first_name_robert_l', 'n_obs')), sum)
+                      'first_name_robert_l', 'first_name_braxton', 'first_name_jubal', 'n_obs')), sum)
 
 
 names_by_county %>% 
